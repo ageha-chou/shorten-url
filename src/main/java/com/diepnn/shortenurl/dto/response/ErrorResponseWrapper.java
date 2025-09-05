@@ -4,7 +4,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 
-public class ErrorResponseWrapper extends BaseResponseWrapper {
+/**
+ * Return when there is an error occurs, used for swagger documentation.
+ */
+public class ErrorResponseWrapper extends BaseResponseWrapper<Void> {
     @Schema(hidden = true)
     private Object data;
 
