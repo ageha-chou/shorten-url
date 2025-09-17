@@ -1,12 +1,41 @@
 package com.diepnn.shortenurl.service;
 
+import com.diepnn.shortenurl.dto.UserInfo;
 import com.diepnn.shortenurl.entity.UrlInfo;
 import com.diepnn.shortenurl.entity.UrlVisit;
+import com.diepnn.shortenurl.mapper.UrlVisitMapper;
+import com.diepnn.shortenurl.repository.UrlVisitRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+@Service
+@RequiredArgsConstructor
 public class UrlVisitServiceImpl implements UrlVisitService {
+    private final UrlVisitRepository urlVisitRepository;
+    private final UrlVisitMapper urlVisitMapper;
+
+    /**
+     * Create a log when the short URL is visited.
+     *
+     * @param shortUrl the short url is accessed
+     * @param userInfo user information
+     * @return the log record
+     * @throws IllegalArgumentException if either argument is null
+     */
+    @Transactional
     @Override
-    public UrlVisit create(String userAgent, String ipAddress, String country, UrlInfo shortUrl) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'create'");
+    public UrlVisit create(UrlInfo shortUrl, UserInfo userInfo) {
+        if (shortUrl == null) {
+            throw new IllegalArgumentException("URL info cannot be null");
+        }
+
+        if (userInfo == null) {
+            throw new IllegalArgumentException("User info cannot be null");
+        }
+
+        UrlVisit urlVisit = urlVisitMapper.toEntity(userInfo);
+        urlVisit.setShortenUrl(shortUrl);
+        return urlVisitRepository.save(urlVisit);
     }
 }

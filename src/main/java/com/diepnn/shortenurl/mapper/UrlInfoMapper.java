@@ -1,20 +1,30 @@
 package com.diepnn.shortenurl.mapper;
 
+import com.diepnn.shortenurl.common.annotation.EnumTranslator;
+import com.diepnn.shortenurl.common.annotation.FromEnum;
+import com.diepnn.shortenurl.common.annotation.FromShortUrl;
+import com.diepnn.shortenurl.common.annotation.ShortUrlTranslator;
+import com.diepnn.shortenurl.common.annotation.ToEnum;
+import com.diepnn.shortenurl.common.annotation.ToShortUrl;
 import com.diepnn.shortenurl.dto.UrlInfoDTO;
 import com.diepnn.shortenurl.entity.UrlInfo;
-import org.springframework.stereotype.Component;
+import com.diepnn.shortenurl.mapper.translator.EnumMappings;
+import com.diepnn.shortenurl.mapper.translator.ShortUrlMappings;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
-@Component
-public class UrlInfoMapper implements BaseMapper<UrlInfo, UrlInfoDTO> {
+/**
+ * Mapper for converting between {@link UrlInfo} and {@link UrlInfoDTO}
+ */
+@Mapper(uses = {EnumMappings.class, ShortUrlMappings.class})
+public abstract class UrlInfoMapper implements BaseMapper<UrlInfo, UrlInfoDTO>{
+    @Mapping(target = "status", qualifiedBy = {EnumTranslator.class, FromEnum.class})
+    @Mapping(target = "shortUrl", source = "shortCode", qualifiedBy = {ShortUrlTranslator.class, ToShortUrl.class})
     @Override
-    public UrlInfoDTO toDTO(UrlInfo entity) {
-        // TODO Auto-generated method stub
-        return null;
-    }
+    public abstract UrlInfoDTO toDto(UrlInfo s);
 
+    @Mapping(target = "status", qualifiedBy = {EnumTranslator.class, ToEnum.class})
+    @Mapping(target = "shortCode", source = "shortUrl", qualifiedBy = {ShortUrlTranslator.class, FromShortUrl.class})
     @Override
-    public UrlInfo toEntity(UrlInfoDTO dto) {
-        // TODO Auto-generated method stub
-        return null;
-    }
+    public abstract UrlInfo toEntity(UrlInfoDTO s);
 }

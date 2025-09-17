@@ -1,6 +1,11 @@
 package com.diepnn.shortenurl.mapper;
 
-public interface BaseMapper<E, D> {
-    E toEntity(D dto);
-    D toDTO(E entity);
+/**
+ * Base mapper for converting between entity and DTO
+ * @param <E> Entity
+ * @param <D> DTO
+ */
+public interface BaseMapper<E,D> {
+    D toDto(E s);
+    E toEntity(D s);
 }
