@@ -1,7 +1,9 @@
 package com.diepnn.shortenurl.service;
 
 import com.diepnn.shortenurl.dto.UserInfo;
+import com.diepnn.shortenurl.dto.cache.UrlInfoCache;
 import com.diepnn.shortenurl.entity.UrlInfo;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,6 +26,9 @@ public class ResolveUrlServiceImplTests {
 
     @Mock
     private UrlInfoService urlInfoService;
+
+    @Mock
+    private EntityManager entityManager;
 
     @InjectMocks
     private ResolveUrlServiceImpl resolveUrlServiceImpl;
@@ -38,13 +44,18 @@ public class ResolveUrlServiceImplTests {
 
     @Test
     public void resolve_whenUrlInfoExists_returnUrlInfo() {
+        // Given
         String shortCode = "abc123";
-        when(urlInfoService.findByShortCode(shortCode)).thenReturn(mock(UrlInfo.class));
+        when(urlInfoService.findByShortCodeCache(shortCode)).thenReturn(mock(UrlInfoCache.class));
+        when(entityManager.getReference(eq(UrlInfo.class), any(Long.class))).thenReturn(mock(UrlInfo.class));
 
+        // When
         resolveUrlServiceImpl.resolve(shortCode, userInfo);
 
-        verify(urlInfoService).findByShortCode(shortCode);
+        // Then
+        verify(urlInfoService).findByShortCodeCache(shortCode);
+        verify(entityManager).getReference(eq(UrlInfo.class), any(Long.class));
         verify(urlVisitService).create(any(UrlInfo.class), any(UserInfo.class));
-        verify(urlInfoService).updateLastAccessDatetimeById(any(UrlInfo.class));
+        verify(urlInfoService).updateLastAccessDatetimeById(any(Long.class), any(LocalDateTime.class));
     }
 }

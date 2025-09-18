@@ -3,7 +3,6 @@ package com.diepnn.shortenurl.common.properties;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 import java.time.Instant;
 
@@ -101,7 +100,6 @@ public class SnowflakeProperties {
      * @param signBits       bit width for the sign/reserved field (often {@code 1})
      * @param epochDate      custom epoch in UTC; should be constant across all deployments
      */
-    @ConstructorBinding
     public SnowflakeProperties(int datacenter, int machine, int dataCenterBits, int machineBits, int epochBits, int signBits, Instant epochDate) {
         this.datacenter = datacenter;
         this.machine = machine;

@@ -5,7 +5,6 @@ import com.diepnn.shortenurl.dto.UserInfo;
 import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.dto.response.BaseResponseWrapper;
 import com.diepnn.shortenurl.dto.response.InvalidResponseWrapper;
-import com.diepnn.shortenurl.entity.UrlInfo;
 import com.diepnn.shortenurl.exception.TooManyRequestException;
 import com.diepnn.shortenurl.mapper.UrlInfoMapper;
 import com.diepnn.shortenurl.mapper.translator.ShortUrlMappings;
@@ -61,8 +60,7 @@ public class UrlInfoController {
         shortUrlMappings.validateOriginalUrl(userRequest.getOriginalUrl());
         userRequest.setOriginalUrl(shortUrlMappings.normalizeUrl(userRequest.getOriginalUrl()));
         UserInfo userInfo = userInfoRequestExtractor.getUserInfo(request);
-        UrlInfo shortenUrl = urlInfoService.create(userRequest, userInfo);
-        UrlInfoDTO dto = urlInfoMapper.toDto(shortenUrl);
+        UrlInfoDTO dto = urlInfoService.create(userRequest, userInfo);
         return ResponseWrapperBuilder.withData(HttpStatus.CREATED, "Shorten URL created successfully", dto);
     }
 }

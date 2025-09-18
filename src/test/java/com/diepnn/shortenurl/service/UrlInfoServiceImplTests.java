@@ -1,39 +1,36 @@
 package com.diepnn.shortenurl.service;
 
 import com.diepnn.shortenurl.common.enums.UrlInfoStatus;
+import com.diepnn.shortenurl.dto.UrlInfoDTO;
 import com.diepnn.shortenurl.dto.UserInfo;
 import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.entity.UrlInfo;
 import com.diepnn.shortenurl.exception.AliasAlreadyExistsException;
 import com.diepnn.shortenurl.exception.IdCollisionException;
-import com.diepnn.shortenurl.exception.NotFoundException;
-import com.diepnn.shortenurl.exception.TooManyRequestException;
+import com.diepnn.shortenurl.mapper.UrlInfoMapper;
 import com.diepnn.shortenurl.repository.UrlInfoRepository;
 import com.diepnn.shortenurl.utils.SqlConstraintUtils;
-import com.diepnn.shortenurl.utils.UserInfoRequestExtractor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,105 +43,256 @@ public class UrlInfoServiceImplTests {
     @Mock
     private UrlInfoRepository urlInfoRepository;
 
-    @MockitoBean
-    private UserInfoRequestExtractor userInfoRequestExtractor;
+    @Mock
+    private UrlInfoMapper urlInfoMapper;
 
     @InjectMocks
-    private UrlInfoServiceImpl urlInfoServiceImpl;
+    private UrlInfoServiceImpl urlService;
 
-    @Captor
-    private ArgumentCaptor<UrlInfo> urlInfoCaptor;
-
-    private final String userIp = "192.168.1.1";
-    private final String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
-    private UserInfo userInfo;
+    private UrlInfoRequest mockRequest;
+    private UserInfo mockUserInfo;
+    private UrlInfo mockUrlInfo;
+    private UrlInfoDTO mockDto;
+    private long mockId;
 
     @BeforeEach
-    public void setup() {
-        userInfo = new UserInfo(userIp, userAgent, LocalDateTime.now(), null);
+    void setUp() {
+        mockId = 12345L;
+        mockRequest = new UrlInfoRequest("https://example.com", "customAlias");
+        mockUserInfo = new UserInfo("192.168.1.1", "Mozilla/5.0", LocalDateTime.now(), null);
+
+        mockUrlInfo = UrlInfo.builder()
+                             .id(mockId)
+                             .originalUrl("https://example.com")
+                             .status(UrlInfoStatus.ACTIVE)
+                             .alias(true)
+                             .shortCode("customalias")
+                             .createdByIp("192.168.1.1")
+                             .createdByUserAgent("Mozilla/5.0")
+                             .createdDatetime(LocalDateTime.now())
+                             .build();
+
+        mockDto = UrlInfoDTO.builder()
+                            .id(mockId)
+                            .originalUrl("https://example.com")
+                            .status("A")
+                            .alias(true)
+                            .shortUrl("http://localhost:8080/customalias")
+                            .createdDatetime(LocalDateTime.now())
+                            .build();
     }
 
     @Test
-    void create_whenAliasIsNull_generateShortUrl() throws TooManyRequestException {
-        UrlInfoRequest userRequest = new UrlInfoRequest("https://google.com", null);
+    void create_ValidRequestWithCustomAlias_ReturnsCreatedUrlInfo() {
+        // Given
+        when(shortCodeService.generateId()).thenReturn(mockId);
+        when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenReturn(mockUrlInfo);
+        when(urlInfoMapper.toDto(any(UrlInfo.class))).thenReturn(mockDto);
 
-        long id = 1L;
-        String shortCode = "abc123";
-        when(shortCodeService.generateId()).thenReturn(id);
-        when(shortCodeService.generateShortCode(id)).thenReturn(shortCode);
+        // When
+        UrlInfoDTO result = urlService.create(mockRequest, mockUserInfo);
 
-        urlInfoServiceImpl.create(userRequest, userInfo);
-        verify(shortCodeService).generateId();
-        verify(shortCodeService).generateShortCode(id);
-        verify(urlInfoRepository).saveAndFlush(urlInfoCaptor.capture());
+        // Then
+        assertNotNull(result);
+        assertEquals(mockId, result.getId());
+        assertEquals("https://example.com", result.getOriginalUrl());
+        assertEquals("http://localhost:8080/customalias", result.getShortUrl()); // lowercase
+        assertEquals(UrlInfoStatus.ACTIVE.getValue(), result.getStatus());
+        assertTrue(result.getAlias());
 
-        assertEquals(shortCode, urlInfoCaptor.getValue().getShortCode());
-        assertFalse(urlInfoCaptor.getValue().getAlias());
-        assertEquals(UrlInfoStatus.ACTIVE, urlInfoCaptor.getValue().getStatus());
-        assertEquals(urlInfoCaptor.getValue().getCreatedByIp(), userIp);
-        assertEquals(urlInfoCaptor.getValue().getCreatedByUserAgent(), userAgent);
+        verify(shortCodeService, times(1)).generateId();
+        verify(shortCodeService, never()).generateShortCode(anyLong()); // Should not generate shortCode when alias provided
+        verify(urlInfoRepository, times(1)).saveAndFlush(any(UrlInfo.class));
     }
 
     @Test
-    void create_whenAliasIsNotNull_notGenerateShortUrl() throws TooManyRequestException {
-        UrlInfoRequest userRequest = new UrlInfoRequest("https://google.com", "abc123");
+    void create_ValidRequestWithoutAlias_GeneratesShortCodeAndReturnsUrlInfo() {
+        // Given
+        UrlInfoRequest requestWithoutAlias = new UrlInfoRequest("https://example.com", null);
 
-        long id = 1L;
-        when(shortCodeService.generateId()).thenReturn(id);
+        String generatedShortCode = "abc123";
+        when(shortCodeService.generateId()).thenReturn(mockId);
+        when(shortCodeService.generateShortCode(mockId)).thenReturn(generatedShortCode);
 
-        urlInfoServiceImpl.create(userRequest, userInfo);
-        verify(shortCodeService).generateId();
-        verify(shortCodeService, times(0)).generateShortCode(id);
-        verify(urlInfoRepository).saveAndFlush(urlInfoCaptor.capture());
+        UrlInfo expectedUrlInfo = UrlInfo.builder()
+                                         .id(mockId)
+                                         .originalUrl("https://example.com")
+                                         .status(UrlInfoStatus.ACTIVE)
+                                         .alias(false)
+                                         .shortCode(generatedShortCode)
+                                         .createdByIp("192.168.1.1")
+                                         .createdByUserAgent("Mozilla/5.0")
+                                         .createdDatetime(LocalDateTime.now())
+                                         .build();
+        UrlInfoDTO expectedDto = UrlInfoDTO.builder()
+                                           .id(mockId)
+                                           .originalUrl("https://example.com")
+                                           .status(UrlInfoStatus.ACTIVE.getValue())
+                                           .alias(false)
+                                           .shortUrl("http://localhost:8080/" + generatedShortCode)
+                                           .createdDatetime(LocalDateTime.now())
+                                           .build();
 
-        assertEquals(userRequest.getAlias(), urlInfoCaptor.getValue().getShortCode());
-        assertTrue(urlInfoCaptor.getValue().getAlias());
-        assertEquals(UrlInfoStatus.ACTIVE, urlInfoCaptor.getValue().getStatus());
-        assertEquals(urlInfoCaptor.getValue().getCreatedByIp(), userIp);
-        assertEquals(urlInfoCaptor.getValue().getCreatedByUserAgent(), userAgent);
+        when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenReturn(expectedUrlInfo);
+        when(urlInfoMapper.toDto(expectedUrlInfo)).thenReturn(expectedDto);
+
+        // When
+        UrlInfoDTO result = urlService.create(requestWithoutAlias, mockUserInfo);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(mockId, result.getId());
+        assertEquals("http://localhost:8080/" + generatedShortCode, result.getShortUrl());
+        assertFalse(result.getAlias()); // Should be false when no alias provided
+
+        verify(shortCodeService, times(1)).generateId();
+        verify(shortCodeService, times(1)).generateShortCode(mockId);
+        verify(urlInfoRepository, times(1)).saveAndFlush(any(UrlInfo.class));
     }
 
     @Test
-    void create_whenDuplicateAlias_throwAliasAlreadyExistException() throws TooManyRequestException {
-        UrlInfoRequest userRequest = new UrlInfoRequest("https://google.com", "abc123");
-        try (MockedStatic<SqlConstraintUtils> sqlConstraintUtilsMock = mockStatic(SqlConstraintUtils.class)) {
-            sqlConstraintUtilsMock.when(() -> SqlConstraintUtils.isUniqueConstraintViolation(any(DataIntegrityViolationException.class),
-                                                                                             any(String[].class)))
-                                  .thenReturn(true);
+    void create_BlankAlias_GeneratesShortCodeInstead() {
+        // Given
+        UrlInfoRequest requestWithBlankAlias = new UrlInfoRequest("https://example.com", "  ");
 
-            when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenThrow(DataIntegrityViolationException.class);
-            when(shortCodeService.generateId()).thenReturn(1L);
-            assertThrows(AliasAlreadyExistsException.class, () -> urlInfoServiceImpl.create(userRequest, userInfo));
+        String generatedShortCode = "def456";
+        when(shortCodeService.generateId()).thenReturn(mockId);
+        when(shortCodeService.generateShortCode(mockId)).thenReturn(generatedShortCode);
+
+        UrlInfo urlInfo = UrlInfo.builder()
+                                 .id(mockId)
+                                 .originalUrl("https://example.com")
+                                 .status(UrlInfoStatus.ACTIVE)
+                                 .alias(false)
+                                 .shortCode(generatedShortCode)
+                                 .createdByIp("192.168.1.1")
+                                 .createdByUserAgent("Mozilla/5.0")
+                                 .createdDatetime(LocalDateTime.now())
+                                 .build();
+
+        UrlInfoDTO expectedDto = UrlInfoDTO.builder()
+                                           .id(mockId)
+                                           .originalUrl("https://example.com")
+                                           .status("A")
+                                           .alias(false)
+                                           .shortUrl("http://localhost:8080/" + generatedShortCode)
+                                           .createdDatetime(LocalDateTime.now())
+                                           .build();
+
+        when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenReturn(urlInfo);
+        when(urlInfoMapper.toDto(urlInfo)).thenReturn(expectedDto);
+
+        // When
+        UrlInfoDTO result = urlService.create(requestWithBlankAlias, mockUserInfo);
+
+        // Then
+        assertNotNull(result);
+        assertEquals("http://localhost:8080/" + generatedShortCode, result.getShortUrl());
+        assertFalse(result.getAlias());
+
+        verify(shortCodeService, times(1)).generateShortCode(mockId);
+        verify(urlInfoRepository, times(1)).saveAndFlush(any(UrlInfo.class));
+    }
+
+    @Test
+    void create_PrimaryKeyViolation_ThrowsIdCollisionException() {
+        // Given
+        when(shortCodeService.generateId()).thenReturn(mockId);
+
+        DataIntegrityViolationException primaryKeyException = new DataIntegrityViolationException("PK violation");
+        when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenThrow(primaryKeyException);
+
+        // Mock static method call
+        try (var mockedStatic = mockStatic(SqlConstraintUtils.class)) {
+            mockedStatic.when(() -> SqlConstraintUtils.isPrimaryKeyViolation(primaryKeyException, null))
+                        .thenReturn(true);
+
+            // When & Then
+            IdCollisionException exception = assertThrows(IdCollisionException.class, () ->
+                    urlService.create(mockRequest, mockUserInfo));
+
+            assertEquals("Id collision detected for id: " + mockId, exception.getMessage());
+            verify(urlInfoRepository, times(1)).saveAndFlush(any(UrlInfo.class));
         }
     }
 
     @Test
-    void create_whenDuplicateId_throwIdCollisionException() throws TooManyRequestException {
-        UrlInfoRequest userRequest = new UrlInfoRequest("https://google.com", null);
-        try (MockedStatic<SqlConstraintUtils> sqlConstraintUtilsMock = mockStatic(SqlConstraintUtils.class)) {
-            sqlConstraintUtilsMock.when(() -> SqlConstraintUtils.isPrimaryKeyViolation(any(DataIntegrityViolationException.class),
-                                                                                       any()))
-                                  .thenReturn(true);
+    void create_UniqueConstraintViolation_ThrowsAliasAlreadyExistsException() {
+        // Given
+        when(shortCodeService.generateId()).thenReturn(mockId);
 
-            when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenThrow(DataIntegrityViolationException.class);
-            when(shortCodeService.generateId()).thenReturn(1L);
-            assertThrows(IdCollisionException.class, () -> urlInfoServiceImpl.create(userRequest, userInfo));
+        DataIntegrityViolationException uniqueConstraintException = new DataIntegrityViolationException("Unique violation");
+        when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenThrow(uniqueConstraintException);
+
+        try (var mockedStatic = mockStatic(SqlConstraintUtils.class)) {
+            mockedStatic.when(() -> SqlConstraintUtils.isPrimaryKeyViolation(uniqueConstraintException, null))
+                        .thenReturn(false);
+            mockedStatic.when(() -> SqlConstraintUtils.isUniqueConstraintViolation(uniqueConstraintException, "uidx_url_info_original_url"))
+                        .thenReturn(true);
+
+            // When & Then
+            AliasAlreadyExistsException exception = assertThrows(AliasAlreadyExistsException.class, () ->
+                    urlService.create(mockRequest, mockUserInfo));
+
+            assertEquals("The alias 'customalias' is already in use.", exception.getMessage());
+            verify(urlInfoRepository, times(1)).saveAndFlush(any(UrlInfo.class));
         }
     }
 
     @Test
-    void findByShortCode_whenUrlInfoExists_returnUrlInfo() {
-        String shortCode = "abc123";
-        when(urlInfoRepository.findByShortCode(shortCode)).thenReturn(Optional.of(mock(UrlInfo.class)));
+    void create_OtherDataIntegrityViolation_PropagatesOriginalException() {
+        // Given
+        when(shortCodeService.generateId()).thenReturn(mockId);
 
-        UrlInfo urlInfo = urlInfoServiceImpl.findByShortCode(shortCode);
-        assertNotNull(urlInfo, "UrlInfo must not null");
+        DataIntegrityViolationException otherException = new DataIntegrityViolationException("Other DB error");
+        when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenThrow(otherException);
+
+        try (var mockedStatic = mockStatic(SqlConstraintUtils.class)) {
+            mockedStatic.when(() -> SqlConstraintUtils.isPrimaryKeyViolation(otherException, null))
+                        .thenReturn(false);
+            mockedStatic.when(() -> SqlConstraintUtils.isUniqueConstraintViolation(otherException, "uidx_url_info_original_url"))
+                        .thenReturn(false);
+
+            // When & Then
+            DataIntegrityViolationException exception = assertThrows(DataIntegrityViolationException.class, () ->
+                    urlService.create(mockRequest, mockUserInfo));
+
+            assertEquals("Other DB error", exception.getMessage());
+            assertSame(otherException, exception);
+            verify(urlInfoRepository, times(1)).saveAndFlush(any(UrlInfo.class));
+        }
     }
 
     @Test
-    void findByShortCode_whenUrlInfoNotExists_throwNotFoundException() {
-        String shortCode = "abc123";
-        when(urlInfoRepository.findByShortCode(shortCode)).thenReturn(Optional.empty());
-        assertThrows(NotFoundException.class, () -> urlInfoServiceImpl.findByShortCode(shortCode));
+    void create_CaseSensitiveAlias_ConvertsToLowercase() {
+        // Given
+        UrlInfoRequest requestWithUppercaseAlias = new UrlInfoRequest("https://example.com", "UPPERCASE");
+
+        when(shortCodeService.generateId()).thenReturn(mockId);
+        when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenAnswer(invocation -> invocation.<UrlInfo>getArgument(0));
+
+        // When
+        urlService.create(requestWithUppercaseAlias, mockUserInfo);
+
+        // Then
+        verify(urlInfoRepository).saveAndFlush(argThat(urlInfo -> "uppercase".equals(urlInfo.getShortCode())));
+    }
+
+    @Test
+    void create_SetsCorrectTimestamp() {
+        // Given
+        LocalDateTime beforeCall = LocalDateTime.now().minusSeconds(1);
+        when(shortCodeService.generateId()).thenReturn(mockId);
+        when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // When
+        urlService.create(mockRequest, mockUserInfo);
+        LocalDateTime afterCall = LocalDateTime.now().plusSeconds(1);
+
+        // Then
+        verify(urlInfoRepository).saveAndFlush(argThat(urlInfo -> {
+            LocalDateTime createdTime = urlInfo.getCreatedDatetime();
+            return createdTime.isAfter(beforeCall) && createdTime.isBefore(afterCall);
+        }));
     }
 }
