@@ -87,7 +87,7 @@ public class UrlInfoControllerTests {
             UrlInfo urlInfo = mockUrlInfo("abc123", "https://example.com");
             UrlInfoDTO dto = mockUrlInfoDTO(urlInfo);
 
-            when(urlInfoService.create(any(UrlInfoRequest.class), any(UserInfo.class))).thenReturn(urlInfo);
+            when(urlInfoService.create(any(UrlInfoRequest.class), any(UserInfo.class))).thenReturn(dto);
             when(urlInfoMapper.toDto(any(UrlInfo.class))).thenReturn(dto);
 
             mockMvc.perform(
