@@ -19,6 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
@@ -28,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,7 +38,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = UrlInfoController.class)
+@WebMvcTest(controllers = UrlInfoController.class,
+            excludeAutoConfiguration = SecurityAutoConfiguration.class)
+@AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
 public class UrlInfoControllerTests {
     private static final String CREATE_ENDPOINT = "/api/v1/url-infos/create";
@@ -87,7 +92,7 @@ public class UrlInfoControllerTests {
             UrlInfo urlInfo = mockUrlInfo("abc123", "https://example.com");
             UrlInfoDTO dto = mockUrlInfoDTO(urlInfo);
 
-            when(urlInfoService.create(any(UrlInfoRequest.class), any(UserInfo.class))).thenReturn(dto);
+            when(urlInfoService.create(any(UrlInfoRequest.class), any(UserInfo.class), nullable(Long.class))).thenReturn(dto);
             when(urlInfoMapper.toDto(any(UrlInfo.class))).thenReturn(dto);
 
             mockMvc.perform(
@@ -99,7 +104,7 @@ public class UrlInfoControllerTests {
                    .andExpect(jsonPath("$.status", is(HttpStatus.CREATED.value())));
 
             verify(userInfoRequestExtractor).getUserInfo(any());
-            verify(urlInfoService).create(any(UrlInfoRequest.class), any(UserInfo.class));
+            verify(urlInfoService).create(any(UrlInfoRequest.class), any(UserInfo.class), nullable(Long.class));
         }
 
         @Test
@@ -107,7 +112,7 @@ public class UrlInfoControllerTests {
         void create_duplicateAlias() throws Exception {
             UrlInfoRequest request = new UrlInfoRequest("https://example.com", "abc123");
 
-            when(urlInfoService.create(any(UrlInfoRequest.class), any(UserInfo.class)))
+            when(urlInfoService.create(any(UrlInfoRequest.class), any(UserInfo.class), nullable(Long.class)))
                     .thenThrow(new AliasAlreadyExistsException("Alias in use"));
 
             mockMvc.perform(
@@ -125,7 +130,7 @@ public class UrlInfoControllerTests {
         void create_tooManyRequests() throws Exception {
             UrlInfoRequest request = new UrlInfoRequest("https://example.com", null);
 
-            when(urlInfoService.create(any(UrlInfoRequest.class), any(UserInfo.class)))
+            when(urlInfoService.create(any(UrlInfoRequest.class), any(UserInfo.class), nullable(Long.class)))
                     .thenThrow(new TooManyRequestException("Id generation conflict"));
 
             mockMvc.perform(
@@ -154,7 +159,7 @@ public class UrlInfoControllerTests {
                    .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())))
                    .andExpect(jsonPath("$.message", is("Invalid request")));
 
-            verify(urlInfoService, never()).create(any(), any());
+            verify(urlInfoService, never()).create(any(), any(), any());
         }
 
         @Test
@@ -169,7 +174,7 @@ public class UrlInfoControllerTests {
                    .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())))
                    .andExpect(jsonPath("$.message", is("Invalid request")));
 
-            verify(urlInfoService, never()).create(any(), any());
+            verify(urlInfoService, never()).create(any(), any(), any());
         }
 
         @Test
@@ -187,7 +192,7 @@ public class UrlInfoControllerTests {
                    .andExpect(jsonPath("$.errors").exists())
                    .andExpect(jsonPath("$.errors[?(@.field == 'originalUrl' && @.message == 'Original URL is required')]").exists());
 
-            verify(urlInfoService, never()).create(any(), any());
+            verify(urlInfoService, never()).create(any(), any(), any());
         }
 
         @ParameterizedTest
@@ -206,7 +211,7 @@ public class UrlInfoControllerTests {
                    .andExpect(jsonPath("$.errors").exists())
                    .andExpect(jsonPath("$.errors[?(@.field == 'originalUrl' && @.message == 'Original URL is required')]").exists());
 
-            verify(urlInfoService, never()).create(any(), any());
+            verify(urlInfoService, never()).create(any(), any(), any());
         }
 
         @ParameterizedTest
@@ -222,7 +227,7 @@ public class UrlInfoControllerTests {
                    .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())))
                    .andExpect(jsonPath("$.message", is("Invalid request")));
 
-            verify(urlInfoService, never()).create(any(), any());
+            verify(urlInfoService, never()).create(any(), any(), any());
         }
 
         @Test
@@ -240,7 +245,7 @@ public class UrlInfoControllerTests {
                    .andExpect(jsonPath("$.errors").exists())
                    .andExpect(jsonPath("$.errors[?(@.field == 'alias' && @.message == 'Alias must be 5-30 chars, letters, digits or hyphens')]").exists());
 
-            verify(urlInfoService, never()).create(any(), any());
+            verify(urlInfoService, never()).create(any(), any(), any());
         }
 
         @Test
@@ -258,7 +263,7 @@ public class UrlInfoControllerTests {
                    .andExpect(jsonPath("$.errors").exists())
                    .andExpect(jsonPath("$.errors[?(@.field == 'alias' && @.message == 'Alias must be 5-30 chars, letters, digits or hyphens')]").exists());
 
-            verify(urlInfoService, never()).create(any(), any());
+            verify(urlInfoService, never()).create(any(), any(), any());
         }
 
         @Test
@@ -276,7 +281,7 @@ public class UrlInfoControllerTests {
                    .andExpect(jsonPath("$.errors").exists())
                    .andExpect(jsonPath("$.errors[?(@.field == 'alias' && @.message == 'Alias must be 5-30 chars, letters, digits or hyphens')]").exists());
 
-            verify(urlInfoService, never()).create(any(), any());
+            verify(urlInfoService, never()).create(any(), any(), any());
         }
 
         @Test
@@ -294,7 +299,7 @@ public class UrlInfoControllerTests {
                    .andExpect(jsonPath("$.errors").exists())
                    .andExpect(jsonPath("$.errors[?(@.field == 'alias' && @.message == 'Alias must be 5-30 chars, letters, digits or hyphens')]").exists());
 
-            verify(urlInfoService, never()).create(any(), any());
+            verify(urlInfoService, never()).create(any(), any(), any());
         }
     }
 }

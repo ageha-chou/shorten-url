@@ -188,10 +188,11 @@ public class UrlInfoServiceImplIT {
             UserInfo userInfo = mockUserInfo("127.0.0.1", "Mozilla/5.0");
             UrlInfoRequest userRequest = new UrlInfoRequest("https://netflix.com", "abcde");
             String expectedMessage = String.format("The alias '%s' is already in use.", userRequest.getAlias());
+            Long userId = 1L;
 
             // When
             AliasAlreadyExistsException ex = assertThrows(AliasAlreadyExistsException.class,
-                                                          () -> urlInfoService.create(userRequest, userInfo));
+                                                          () -> urlInfoService.create(userRequest, userInfo, userId));
 
             // Then
             assertEquals(expectedMessage, ex.getMessage());

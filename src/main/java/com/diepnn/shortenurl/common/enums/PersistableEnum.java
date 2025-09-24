@@ -1,6 +1,7 @@
 package com.diepnn.shortenurl.common.enums;
 
 import com.diepnn.shortenurl.mapper.translator.EnumMappings;
+import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
  * <p>The common interface the enum to have the common properties {@code value}</p>
@@ -8,5 +9,6 @@ import com.diepnn.shortenurl.mapper.translator.EnumMappings;
  * enum to String</p>
  */
 public interface PersistableEnum {
+    @JsonValue
     String getValue();
 }

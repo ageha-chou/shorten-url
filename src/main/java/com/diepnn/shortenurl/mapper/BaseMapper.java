@@ -7,5 +7,4 @@ package com.diepnn.shortenurl.mapper;
  */
 public interface BaseMapper<E,D> {
     D toDto(E s);
-    E toEntity(D s);
 }

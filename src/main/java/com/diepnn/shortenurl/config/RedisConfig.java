@@ -78,7 +78,7 @@ public class RedisConfig {
     }
 
     private RedisCacheConfiguration getRedisCacheConfiguration(Map.Entry<String, Long> entry, RedisCacheConfiguration defaultCacheConfig) {
-        Class<?> clazz = redisCacheProperties.getCacheType().get(entry.getKey());
+        Class<?> clazz = redisCacheProperties.getCacheType().getOrDefault(entry.getKey(), Object.class);
         return defaultCacheConfig.entryTtl(Duration.ofMillis(entry.getValue()))
                                  .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(new Jackson2JsonRedisSerializer<>(objectMapper, clazz)));
     }

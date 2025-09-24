@@ -5,19 +5,20 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
-public enum UrlInfoStatus implements PersistableEnum {
-    ACTIVE("A"),
-    EXPIRED("E");
+public enum ProviderType implements PersistableEnum {
+    LOCAL("LOCAL"),
+    GOOGLE("GOOGLE"),
+    FACEBOOK("FACEBOOK");
 
     private final String value;
 
     @Override
     public String getValue() {
-        return this.value;
+        return value;
     }
 
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
-    public static UrlInfoStatus fromValue(String value) {
-        return EnumUtils.fromValue(UrlInfoStatus.class, value);
+    public static ProviderType fromValue(String value) {
+        return EnumUtils.fromValue(ProviderType.class, value);
     }
 }

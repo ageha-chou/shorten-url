@@ -54,10 +54,12 @@ public class UrlInfoServiceImplTests {
     private UrlInfo mockUrlInfo;
     private UrlInfoDTO mockDto;
     private long mockId;
+    private Long userId;
 
     @BeforeEach
     void setUp() {
         mockId = 12345L;
+        userId = 123L;
         mockRequest = new UrlInfoRequest("https://example.com", "customAlias");
         mockUserInfo = new UserInfo("192.168.1.1", "Mozilla/5.0", LocalDateTime.now(), null);
 
@@ -67,6 +69,7 @@ public class UrlInfoServiceImplTests {
                              .status(UrlInfoStatus.ACTIVE)
                              .alias(true)
                              .shortCode("customalias")
+                             .userId(userId)
                              .createdByIp("192.168.1.1")
                              .createdByUserAgent("Mozilla/5.0")
                              .createdDatetime(LocalDateTime.now())
@@ -90,7 +93,7 @@ public class UrlInfoServiceImplTests {
         when(urlInfoMapper.toDto(any(UrlInfo.class))).thenReturn(mockDto);
 
         // When
-        UrlInfoDTO result = urlService.create(mockRequest, mockUserInfo);
+        UrlInfoDTO result = urlService.create(mockRequest, mockUserInfo, userId);
 
         // Then
         assertNotNull(result);
@@ -137,7 +140,7 @@ public class UrlInfoServiceImplTests {
         when(urlInfoMapper.toDto(expectedUrlInfo)).thenReturn(expectedDto);
 
         // When
-        UrlInfoDTO result = urlService.create(requestWithoutAlias, mockUserInfo);
+        UrlInfoDTO result = urlService.create(requestWithoutAlias, mockUserInfo, userId);
 
         // Then
         assertNotNull(result);
@@ -183,7 +186,7 @@ public class UrlInfoServiceImplTests {
         when(urlInfoMapper.toDto(urlInfo)).thenReturn(expectedDto);
 
         // When
-        UrlInfoDTO result = urlService.create(requestWithBlankAlias, mockUserInfo);
+        UrlInfoDTO result = urlService.create(requestWithBlankAlias, mockUserInfo, userId);
 
         // Then
         assertNotNull(result);
@@ -209,7 +212,7 @@ public class UrlInfoServiceImplTests {
 
             // When & Then
             IdCollisionException exception = assertThrows(IdCollisionException.class, () ->
-                    urlService.create(mockRequest, mockUserInfo));
+                    urlService.create(mockRequest, mockUserInfo, userId));
 
             assertEquals("Id collision detected for id: " + mockId, exception.getMessage());
             verify(urlInfoRepository, times(1)).saveAndFlush(any(UrlInfo.class));
@@ -232,7 +235,7 @@ public class UrlInfoServiceImplTests {
 
             // When & Then
             AliasAlreadyExistsException exception = assertThrows(AliasAlreadyExistsException.class, () ->
-                    urlService.create(mockRequest, mockUserInfo));
+                    urlService.create(mockRequest, mockUserInfo, userId));
 
             assertEquals("The alias 'customalias' is already in use.", exception.getMessage());
             verify(urlInfoRepository, times(1)).saveAndFlush(any(UrlInfo.class));
@@ -255,7 +258,7 @@ public class UrlInfoServiceImplTests {
 
             // When & Then
             DataIntegrityViolationException exception = assertThrows(DataIntegrityViolationException.class, () ->
-                    urlService.create(mockRequest, mockUserInfo));
+                    urlService.create(mockRequest, mockUserInfo, userId));
 
             assertEquals("Other DB error", exception.getMessage());
             assertSame(otherException, exception);
@@ -272,7 +275,7 @@ public class UrlInfoServiceImplTests {
         when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenAnswer(invocation -> invocation.<UrlInfo>getArgument(0));
 
         // When
-        urlService.create(requestWithUppercaseAlias, mockUserInfo);
+        urlService.create(requestWithUppercaseAlias, mockUserInfo, userId);
 
         // Then
         verify(urlInfoRepository).saveAndFlush(argThat(urlInfo -> "uppercase".equals(urlInfo.getShortCode())));
@@ -286,7 +289,7 @@ public class UrlInfoServiceImplTests {
         when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
-        urlService.create(mockRequest, mockUserInfo);
+        urlService.create(mockRequest, mockUserInfo, userId);
         LocalDateTime afterCall = LocalDateTime.now().plusSeconds(1);
 
         // Then

@@ -18,7 +18,7 @@ public interface UrlInfoService {
      * @param userRequest contains the original URL and alias (optional)
      * @return a generated short URL
      */
-    UrlInfoDTO create(UrlInfoRequest userRequest, UserInfo userInfo) throws TooManyRequestException;
+    UrlInfoDTO create(UrlInfoRequest userRequest, UserInfo userInfo, Long userId) throws TooManyRequestException;
 
     /**
      * Find url info by short code and cache it.

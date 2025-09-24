@@ -33,7 +33,7 @@ public class UrlInfoServiceImpl implements UrlInfoService {
 
     @Transactional
     @Override
-    public UrlInfoDTO create(UrlInfoRequest userRequest, UserInfo userInfo) {
+    public UrlInfoDTO create(UrlInfoRequest userRequest, UserInfo userInfo, Long userId) {
         long id = shortCodeService.generateId();
 
         String shortCode = StringUtils.lowerCase(userRequest.getAlias());
@@ -47,6 +47,7 @@ public class UrlInfoServiceImpl implements UrlInfoService {
                                  .status(UrlInfoStatus.ACTIVE)
                                  .alias(userRequest.getAlias() != null)
                                  .shortCode(shortCode)
+                                 .userId(userId)
                                  .createdByIp(userInfo.ipAddress())
                                  .createdByUserAgent(userInfo.userAgent())
                                  .createdDatetime(LocalDateTime.now())

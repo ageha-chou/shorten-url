@@ -5,19 +5,20 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
-public enum UrlInfoStatus implements PersistableEnum {
+public enum UsersStatus implements PersistableEnum {
     ACTIVE("A"),
-    EXPIRED("E");
+    BLOCKED("BL"),
+    BANNED("BA");
 
     private final String value;
 
     @Override
     public String getValue() {
-        return this.value;
+        return value;
     }
 
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
-    public static UrlInfoStatus fromValue(String value) {
-        return EnumUtils.fromValue(UrlInfoStatus.class, value);
+    public static UsersStatus fromValue(String value) {
+        return EnumUtils.fromValue(UsersStatus.class, value);
     }
 }
