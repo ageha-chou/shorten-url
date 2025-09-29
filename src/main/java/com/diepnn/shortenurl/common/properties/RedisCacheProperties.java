@@ -14,5 +14,5 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class RedisCacheProperties {
     private final Map<String, Long> cacheTtl;
-    private final Map<String, Class<?>> cacheType;
+    private final Map<String, String> cacheType;
 }

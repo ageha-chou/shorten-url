@@ -19,6 +19,10 @@ public enum ProviderType implements PersistableEnum {
 
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static ProviderType fromValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        value = value.toUpperCase();
         return EnumUtils.fromValue(ProviderType.class, value);
     }
 }

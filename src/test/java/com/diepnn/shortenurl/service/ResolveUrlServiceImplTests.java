@@ -55,7 +55,7 @@ public class ResolveUrlServiceImplTests {
         // Then
         verify(urlInfoService).findByShortCodeCache(shortCode);
         verify(entityManager).getReference(eq(UrlInfo.class), any(Long.class));
-        verify(urlVisitService).create(any(UrlInfo.class), any(UserInfo.class));
-        verify(urlInfoService).updateLastAccessDatetimeById(any(Long.class), any(LocalDateTime.class));
+        verify(urlVisitService).createAsync(any(UrlInfo.class), any(UserInfo.class));
+        verify(urlInfoService).updateLastAccessDatetimeByIdAsync(any(Long.class), any(LocalDateTime.class));
     }
 }

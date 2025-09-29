@@ -9,6 +9,7 @@ import com.diepnn.shortenurl.exception.AliasAlreadyExistsException;
 import com.diepnn.shortenurl.exception.IdCollisionException;
 import com.diepnn.shortenurl.mapper.UrlInfoMapper;
 import com.diepnn.shortenurl.repository.UrlInfoRepository;
+import com.diepnn.shortenurl.service.cache.UrlInfoCacheService;
 import com.diepnn.shortenurl.utils.SqlConstraintUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -45,6 +47,9 @@ public class UrlInfoServiceImplTests {
 
     @Mock
     private UrlInfoMapper urlInfoMapper;
+
+    @Mock
+    private UrlInfoCacheService urlInfoCacheService;
 
     @InjectMocks
     private UrlInfoServiceImpl urlService;
@@ -93,7 +98,7 @@ public class UrlInfoServiceImplTests {
         when(urlInfoMapper.toDto(any(UrlInfo.class))).thenReturn(mockDto);
 
         // When
-        UrlInfoDTO result = urlService.create(mockRequest, mockUserInfo, userId);
+        UrlInfoDTO result = urlService.create(mockRequest, mockUserInfo, null);
 
         // Then
         assertNotNull(result);
@@ -140,7 +145,7 @@ public class UrlInfoServiceImplTests {
         when(urlInfoMapper.toDto(expectedUrlInfo)).thenReturn(expectedDto);
 
         // When
-        UrlInfoDTO result = urlService.create(requestWithoutAlias, mockUserInfo, userId);
+        UrlInfoDTO result = urlService.create(requestWithoutAlias, mockUserInfo, null);
 
         // Then
         assertNotNull(result);
@@ -184,6 +189,7 @@ public class UrlInfoServiceImplTests {
 
         when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenReturn(urlInfo);
         when(urlInfoMapper.toDto(urlInfo)).thenReturn(expectedDto);
+        doNothing().when(urlInfoCacheService).evictUserUrlsCache(userId);
 
         // When
         UrlInfoDTO result = urlService.create(requestWithBlankAlias, mockUserInfo, userId);
@@ -195,6 +201,7 @@ public class UrlInfoServiceImplTests {
 
         verify(shortCodeService, times(1)).generateShortCode(mockId);
         verify(urlInfoRepository, times(1)).saveAndFlush(any(UrlInfo.class));
+        verify(urlInfoCacheService, times(1)).evictUserUrlsCache(userId);
     }
 
     @Test
@@ -275,10 +282,11 @@ public class UrlInfoServiceImplTests {
         when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenAnswer(invocation -> invocation.<UrlInfo>getArgument(0));
 
         // When
-        urlService.create(requestWithUppercaseAlias, mockUserInfo, userId);
+        urlService.create(requestWithUppercaseAlias, mockUserInfo, null);
 
         // Then
         verify(urlInfoRepository).saveAndFlush(argThat(urlInfo -> "uppercase".equals(urlInfo.getShortCode())));
+        verify(urlInfoCacheService, times(0)).evictUserUrlsCache(null);
     }
 
     @Test
@@ -287,6 +295,7 @@ public class UrlInfoServiceImplTests {
         LocalDateTime beforeCall = LocalDateTime.now().minusSeconds(1);
         when(shortCodeService.generateId()).thenReturn(mockId);
         when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doNothing().when(urlInfoCacheService).evictUserUrlsCache(userId);
 
         // When
         urlService.create(mockRequest, mockUserInfo, userId);
@@ -297,5 +306,6 @@ public class UrlInfoServiceImplTests {
             LocalDateTime createdTime = urlInfo.getCreatedDatetime();
             return createdTime.isAfter(beforeCall) && createdTime.isBefore(afterCall);
         }));
+        verify(urlInfoCacheService, times(1)).evictUserUrlsCache(userId);
     }
 }

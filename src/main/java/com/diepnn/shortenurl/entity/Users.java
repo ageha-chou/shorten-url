@@ -47,6 +47,9 @@ public class Users {
     private String email;
 
     @Column
+    private String avatar;
+
+    @Column
     private String username;
 
     @Column

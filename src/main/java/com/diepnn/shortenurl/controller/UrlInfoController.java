@@ -23,11 +23,14 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * The controller for managing URL information.
@@ -36,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/url-infos")
 @RequiredArgsConstructor
 @Tag(name = "URL Info", description = "URL Info API")
+@SecurityRequirement(name = "Bearer Authentication")
 public class UrlInfoController {
     private final UrlInfoService urlInfoService;
     private final UserInfoRequestExtractor userInfoRequestExtractor;
@@ -48,8 +52,7 @@ public class UrlInfoController {
      * @return a generated short URL
      * @throws TooManyRequestException if the number of short URLs created exceeds the limit
      */
-    @Operation(summary = "Create shorten URL for the original URL",
-               security = @SecurityRequirement(name = "Bearer Authentication"))
+    @Operation(summary = "Create shorten URL for the original URL")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Created successfully", useReturnTypeSchema = true),
             @ApiResponse(responseCode = "400", description = "Invalid URL",
@@ -66,10 +69,18 @@ public class UrlInfoController {
 
         Long userId = null;
         if (userDetails != null && userDetails.getUser() != null) {
-            userId = userDetails.getUser().getId();
+            userId = userDetails.getId();
         }
 
         UrlInfoDTO dto = urlInfoService.create(userRequest, userInfo, userId);
         return ResponseWrapperBuilder.withData(HttpStatus.CREATED, "Shorten URL created successfully", dto);
+    }
+
+    @GetMapping
+    @ResponseStatus(HttpStatus.OK)
+    public BaseResponseWrapper<List<UrlInfoDTO>> getByUser(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        Long userId = userDetails.getId();
+        List<UrlInfoDTO> urlInfos = urlInfoService.findAllByUserId(userId);
+        return ResponseWrapperBuilder.withData(HttpStatus.OK, "Found", urlInfos);
     }
 }

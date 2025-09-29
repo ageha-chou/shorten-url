@@ -13,6 +13,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 create table users (
    id bigint auto_increment,
    email varchar(255),
+   avatar varchar(2000),
    username varchar(50),
    password varchar(255),
    first_name varchar(50),

@@ -34,7 +34,7 @@ public class GlobalExceptionHandler {
     public BaseResponseWrapper<Void> handleConstraintViolation(ConstraintViolationException ex) {
         List<ErrorDetail> errors = new ArrayList<>();
         ex.getConstraintViolations().forEach(violation -> {
-            String fieldName = violation.getPropertyPath().toString();
+            String fieldName = camelToSnake(violation.getPropertyPath().toString());
             String errorMessage = violation.getMessage();
             errors.add(new ErrorDetail(fieldName, errorMessage));
         });
@@ -53,7 +53,7 @@ public class GlobalExceptionHandler {
     public BaseResponseWrapper<Void> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex) {
         List<ErrorDetail> errors = new ArrayList<>();
         ex.getBindingResult().getFieldErrors().forEach(fieldError -> {
-            String fieldName = fieldError.getField();
+            String fieldName = camelToSnake(fieldError.getField());
             String errorMessage = fieldError.getDefaultMessage();
             errors.add(new ErrorDetail(fieldName, errorMessage));
         });
@@ -109,5 +109,9 @@ public class GlobalExceptionHandler {
         log.error("Unhandled exception at [{} {}]",
                   request.getDescription(false), request, ex);
         return ResponseWrapperBuilder.withNoData(HttpStatus.INTERNAL_SERVER_ERROR, "Something went wrong");
+    }
+
+    private String camelToSnake(String fieldName) {
+        return fieldName.replaceAll("([a-z])([A-Z]+)", "$1_$2").toLowerCase();
     }
 }

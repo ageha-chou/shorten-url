@@ -69,6 +69,7 @@ public class UsersController {
     public BaseResponseWrapper<UserDTO> updateUserInfo(@Valid @RequestBody UserUpdateRequest userRequest,
                                                        @AuthenticationPrincipal CustomUserDetails userDetails) {
         String username = userDetails.getUsername();
-        return ResponseWrapperBuilder.withData(HttpStatus.OK, "User updated successfully", usersService.update(userRequest, username));
+        UserDTO dto = usersService.update(userRequest, username);
+        return ResponseWrapperBuilder.withData(HttpStatus.OK, "User updated successfully", dto);
     }
 }

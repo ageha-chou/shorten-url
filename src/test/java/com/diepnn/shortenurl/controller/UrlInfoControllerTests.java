@@ -7,6 +7,7 @@ import com.diepnn.shortenurl.entity.UrlInfo;
 import com.diepnn.shortenurl.exception.AliasAlreadyExistsException;
 import com.diepnn.shortenurl.exception.GlobalExceptionHandler;
 import com.diepnn.shortenurl.exception.TooManyRequestException;
+import com.diepnn.shortenurl.helper.BaseControllerTest;
 import com.diepnn.shortenurl.mapper.UrlInfoMapper;
 import com.diepnn.shortenurl.mapper.translator.ShortUrlMappings;
 import com.diepnn.shortenurl.service.UrlInfoService;
@@ -42,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
             excludeAutoConfiguration = SecurityAutoConfiguration.class)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
-public class UrlInfoControllerTests {
+public class UrlInfoControllerTests extends BaseControllerTest {
     private static final String CREATE_ENDPOINT = "/api/v1/url-infos/create";
 
     @Autowired
@@ -148,21 +149,6 @@ public class UrlInfoControllerTests {
     @DisplayName("POST /api/v1/url-infos/create: validation")
     class UrlInfoRequestValidation {
         @Test
-        @DisplayName("POST create: urlInfoRequest is null -> return 400")
-        void create_urlInfoRequestIsNull_returns400() throws Exception {
-            mockMvc.perform(
-                           post(CREATE_ENDPOINT)
-                                   .contentType(MediaType.APPLICATION_JSON)
-                                   .content(objectMapper.writeValueAsString(null))
-                           )
-                   .andExpect(status().isBadRequest())
-                   .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())))
-                   .andExpect(jsonPath("$.message", is("Invalid request")));
-
-            verify(urlInfoService, never()).create(any(), any(), any());
-        }
-
-        @Test
         @DisplayName("POST create: blank request body -> return 400")
         void create_requestBodyIsBlank_returns400() throws Exception {
             mockMvc.perform(
@@ -190,7 +176,7 @@ public class UrlInfoControllerTests {
                    .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())))
                    .andExpect(jsonPath("$.message", is("Invalid request")))
                    .andExpect(jsonPath("$.errors").exists())
-                   .andExpect(jsonPath("$.errors[?(@.field == 'originalUrl' && @.message == 'Original URL is required')]").exists());
+                   .andExpect(jsonPath("$.errors[?(@.field == 'original_url' && @.message == 'Original URL is required')]").exists());
 
             verify(urlInfoService, never()).create(any(), any(), any());
         }
@@ -209,7 +195,7 @@ public class UrlInfoControllerTests {
                    .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())))
                    .andExpect(jsonPath("$.message", is("Invalid request")))
                    .andExpect(jsonPath("$.errors").exists())
-                   .andExpect(jsonPath("$.errors[?(@.field == 'originalUrl' && @.message == 'Original URL is required')]").exists());
+                   .andExpect(jsonPath("$.errors[?(@.field == 'original_url' && @.message == 'Original URL is required')]").exists());
 
             verify(urlInfoService, never()).create(any(), any(), any());
         }

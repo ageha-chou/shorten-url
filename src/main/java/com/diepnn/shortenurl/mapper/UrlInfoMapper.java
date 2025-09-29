@@ -11,6 +11,8 @@ import com.diepnn.shortenurl.mapper.translator.ShortUrlMappings;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
+import java.util.List;
+
 /**
  * Mapper for converting between {@link UrlInfo} and {@link UrlInfoDTO}
  */

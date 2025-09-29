@@ -32,11 +32,11 @@ public class UsersServiceImpl implements UsersService {
             return usersMapper.toDto(usersRepository.saveAndFlush(user));
         } catch (DataIntegrityViolationException e) {
             if (SqlConstraintUtils.isUniqueConstraintViolation(e, "uidx_users_username")) {
-                throw new DuplicateUniqueKeyException("Username '" + user.getUsername() + "' is already in use");
+                throw new DuplicateUniqueKeyException("Username '" + user.getUsername() + "' is already in use.");
             }
 
             if (SqlConstraintUtils.isUniqueConstraintViolation(e, "uidx_users_email")) {
-                throw new DuplicateUniqueKeyException("Email '" + user.getEmail() + "' is already in use");
+                throw new DuplicateUniqueKeyException("Email '" + user.getEmail() + "' is already in use.");
             }
 
             throw e;

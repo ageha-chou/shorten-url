@@ -3,6 +3,7 @@ package com.diepnn.shortenurl.controller;
 import com.diepnn.shortenurl.dto.UserInfo;
 import com.diepnn.shortenurl.exception.GlobalExceptionHandler;
 import com.diepnn.shortenurl.exception.NotFoundException;
+import com.diepnn.shortenurl.helper.BaseControllerTest;
 import com.diepnn.shortenurl.mapper.UrlInfoMapper;
 import com.diepnn.shortenurl.service.ResolveUrlService;
 import com.diepnn.shortenurl.utils.UserInfoRequestExtractor;
@@ -34,7 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
             excludeAutoConfiguration = SecurityAutoConfiguration.class)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(GlobalExceptionHandler.class)
-class ResolveUrlControllerTests {
+class ResolveUrlControllerTests extends BaseControllerTest {
     private static final String ACCESS_ENDPOINT = "/{shortCode}";
 
     @Autowired

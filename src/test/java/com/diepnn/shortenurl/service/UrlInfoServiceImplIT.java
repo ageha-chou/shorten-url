@@ -52,7 +52,7 @@ public class UrlInfoServiceImplIT {
         );
 
         // Clear cache before each test
-        cacheManager.getCache("urls").clear();
+        cacheManager.getCache("url-access").clear();
     }
 
     private UserInfo mockUserInfo(String ipAddress, String userAgent) {
@@ -82,7 +82,7 @@ public class UrlInfoServiceImplIT {
             verify(urlInfoRepository, times(1)).findUrlInfoCacheByShortCode(validShortCode);
 
             // Verify cache contains the result
-            assertNotNull(cacheManager.getCache("urls").get(validShortCode));
+            assertNotNull(cacheManager.getCache("url-access").get(validShortCode));
         }
 
         @Test
@@ -115,7 +115,7 @@ public class UrlInfoServiceImplIT {
             urlService.findByShortCodeCache(validShortCode);
 
             // Evict cache manually
-            cacheManager.getCache("urls").evict(validShortCode);
+            cacheManager.getCache("url-access").evict(validShortCode);
 
             // Second call after cache eviction
             urlService.findByShortCodeCache(validShortCode);
