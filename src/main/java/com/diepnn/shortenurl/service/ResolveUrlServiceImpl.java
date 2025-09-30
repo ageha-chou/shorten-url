@@ -19,8 +19,8 @@ public class ResolveUrlServiceImpl implements ResolveUrlService {
     @Override
     public String resolve(String shortCode, UserInfo userInfo) {
         UrlInfoCache urlInfo = urlInfoService.findByShortCodeCache(shortCode);
-        urlVisitService.create(entityManager.getReference(UrlInfo.class, urlInfo.id()), userInfo);
-        urlInfoService.updateLastAccessDatetimeById(urlInfo.id(), userInfo.visitedDatetime());
+        urlVisitService.createAsync(entityManager.getReference(UrlInfo.class, urlInfo.id()), userInfo);
+        urlInfoService.updateLastAccessDatetimeByIdAsync(urlInfo.id(), userInfo.visitedDatetime());
         return urlInfo.originalUrl();
     }
 }

@@ -2,7 +2,6 @@ package com.diepnn.shortenurl.common.enums;
 
 import com.diepnn.shortenurl.utils.EnumUtils;
 import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
@@ -12,7 +11,6 @@ public enum UrlInfoStatus implements PersistableEnum {
 
     private final String value;
 
-    @JsonValue
     @Override
     public String getValue() {
         return this.value;

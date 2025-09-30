@@ -6,8 +6,8 @@ import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.dto.response.BaseResponseWrapper;
 import com.diepnn.shortenurl.dto.response.InvalidResponseWrapper;
 import com.diepnn.shortenurl.exception.TooManyRequestException;
-import com.diepnn.shortenurl.mapper.UrlInfoMapper;
 import com.diepnn.shortenurl.mapper.translator.ShortUrlMappings;
+import com.diepnn.shortenurl.security.CustomUserDetails;
 import com.diepnn.shortenurl.service.UrlInfoService;
 import com.diepnn.shortenurl.utils.ResponseWrapperBuilder;
 import com.diepnn.shortenurl.utils.UserInfoRequestExtractor;
@@ -16,16 +16,21 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * The controller for managing URL information.
@@ -34,10 +39,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/url-infos")
 @RequiredArgsConstructor
 @Tag(name = "URL Info", description = "URL Info API")
+@SecurityRequirement(name = "Bearer Authentication")
 public class UrlInfoController {
     private final UrlInfoService urlInfoService;
     private final UserInfoRequestExtractor userInfoRequestExtractor;
-    private final UrlInfoMapper urlInfoMapper;
     private final ShortUrlMappings shortUrlMappings;
 
     /**
@@ -56,11 +61,26 @@ public class UrlInfoController {
     })
     @PostMapping(path = "/create")
     @ResponseStatus(HttpStatus.CREATED)
-    public BaseResponseWrapper<UrlInfoDTO> create(@Valid @RequestBody UrlInfoRequest userRequest, HttpServletRequest request) throws TooManyRequestException {
+    public BaseResponseWrapper<UrlInfoDTO> create(@Valid @RequestBody UrlInfoRequest userRequest, HttpServletRequest request,
+                                                  @AuthenticationPrincipal CustomUserDetails userDetails) throws TooManyRequestException {
         shortUrlMappings.validateOriginalUrl(userRequest.getOriginalUrl());
         userRequest.setOriginalUrl(shortUrlMappings.normalizeUrl(userRequest.getOriginalUrl()));
         UserInfo userInfo = userInfoRequestExtractor.getUserInfo(request);
-        UrlInfoDTO dto = urlInfoService.create(userRequest, userInfo);
+
+        Long userId = null;
+        if (userDetails != null && userDetails.getUser() != null) {
+            userId = userDetails.getId();
+        }
+
+        UrlInfoDTO dto = urlInfoService.create(userRequest, userInfo, userId);
         return ResponseWrapperBuilder.withData(HttpStatus.CREATED, "Shorten URL created successfully", dto);
+    }
+
+    @GetMapping
+    @ResponseStatus(HttpStatus.OK)
+    public BaseResponseWrapper<List<UrlInfoDTO>> getByUser(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        Long userId = userDetails.getId();
+        List<UrlInfoDTO> urlInfos = urlInfoService.findAllByUserId(userId);
+        return ResponseWrapperBuilder.withData(HttpStatus.OK, "Found", urlInfos);
     }
 }

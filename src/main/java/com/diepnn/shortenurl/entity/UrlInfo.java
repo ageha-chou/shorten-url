@@ -77,4 +77,10 @@ public class UrlInfo {
     /** Last time this short URL was accessed for redirection (UTC). */
     @Column
     private LocalDateTime lastAccessDatetime;
+
+    /**
+     * The user's id who created the short URL.
+     */
+    @Column(name = "created_by")
+    private Long userId;
 }

@@ -7,6 +7,7 @@ import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.exception.TooManyRequestException;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Service for shortening and resolving URLs
@@ -18,7 +19,7 @@ public interface UrlInfoService {
      * @param userRequest contains the original URL and alias (optional)
      * @return a generated short URL
      */
-    UrlInfoDTO create(UrlInfoRequest userRequest, UserInfo userInfo) throws TooManyRequestException;
+    UrlInfoDTO create(UrlInfoRequest userRequest, UserInfo userInfo, Long userId) throws TooManyRequestException;
 
     /**
      * Find url info by short code and cache it.
@@ -32,5 +33,7 @@ public interface UrlInfoService {
      * @param urlId url info id
      * @param lastAccessDatetime last access datetime
      */
-    void updateLastAccessDatetimeById(Long urlId, LocalDateTime lastAccessDatetime);
+    void updateLastAccessDatetimeByIdAsync(Long urlId, LocalDateTime lastAccessDatetime);
+
+    List<UrlInfoDTO> findAllByUserId(Long userId);
 }

@@ -52,7 +52,7 @@ public class UrlInfoServiceImplIT {
         );
 
         // Clear cache before each test
-        cacheManager.getCache("urls").clear();
+        cacheManager.getCache("url-access").clear();
     }
 
     private UserInfo mockUserInfo(String ipAddress, String userAgent) {
@@ -82,7 +82,7 @@ public class UrlInfoServiceImplIT {
             verify(urlInfoRepository, times(1)).findUrlInfoCacheByShortCode(validShortCode);
 
             // Verify cache contains the result
-            assertNotNull(cacheManager.getCache("urls").get(validShortCode));
+            assertNotNull(cacheManager.getCache("url-access").get(validShortCode));
         }
 
         @Test
@@ -115,7 +115,7 @@ public class UrlInfoServiceImplIT {
             urlService.findByShortCodeCache(validShortCode);
 
             // Evict cache manually
-            cacheManager.getCache("urls").evict(validShortCode);
+            cacheManager.getCache("url-access").evict(validShortCode);
 
             // Second call after cache eviction
             urlService.findByShortCodeCache(validShortCode);
@@ -188,10 +188,11 @@ public class UrlInfoServiceImplIT {
             UserInfo userInfo = mockUserInfo("127.0.0.1", "Mozilla/5.0");
             UrlInfoRequest userRequest = new UrlInfoRequest("https://netflix.com", "abcde");
             String expectedMessage = String.format("The alias '%s' is already in use.", userRequest.getAlias());
+            Long userId = 1L;
 
             // When
             AliasAlreadyExistsException ex = assertThrows(AliasAlreadyExistsException.class,
-                                                          () -> urlInfoService.create(userRequest, userInfo));
+                                                          () -> urlInfoService.create(userRequest, userInfo, userId));
 
             // Then
             assertEquals(expectedMessage, ex.getMessage());
