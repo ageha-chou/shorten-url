@@ -48,10 +48,11 @@ create table url_info (
     created_by_ip varchar(30),
     created_by_user_agent varchar(512),
 	created_datetime timestamp,
+    updated_datetime timestamp,
 	last_access_datetime timestamp,
 	primary key (id),
     constraint fk_url_info_users foreign key (created_by) references users(id),
-    unique index uidx_url_info_original_url(short_url)
+    unique index uidx_url_info_original_url(short_code)
 );
 
 create table url_visit (

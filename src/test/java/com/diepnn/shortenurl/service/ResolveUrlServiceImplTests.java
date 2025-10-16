@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -44,15 +45,14 @@ public class ResolveUrlServiceImplTests {
 
     @Test
     public void resolve_whenUrlInfoExists_returnUrlInfo() {
-        // Given
         String shortCode = "abc123";
-        when(urlInfoService.findByShortCodeCache(shortCode)).thenReturn(mock(UrlInfoCache.class));
+        UrlInfoCache urlInfoCache = new UrlInfoCache(1L, "https://example.com");
+        when(urlInfoService.findByShortCodeCache(shortCode)).thenReturn(urlInfoCache);
         when(entityManager.getReference(eq(UrlInfo.class), any(Long.class))).thenReturn(mock(UrlInfo.class));
 
-        // When
-        resolveUrlServiceImpl.resolve(shortCode, userInfo);
+        String url = resolveUrlServiceImpl.resolve(shortCode, userInfo);
 
-        // Then
+        assertEquals(urlInfoCache.originalUrl(), url, "Resolved URL should match the mocked cache original URL");
         verify(urlInfoService).findByShortCodeCache(shortCode);
         verify(entityManager).getReference(eq(UrlInfo.class), any(Long.class));
         verify(urlVisitService).createAsync(any(UrlInfo.class), any(UserInfo.class));

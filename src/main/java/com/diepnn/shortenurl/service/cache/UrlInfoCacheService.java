@@ -41,4 +41,9 @@ public class UrlInfoCacheService {
     public void evictUserUrlsCache(Long userId) {
         log.debug("Evicted user-urls cache for user: {}", userId);
     }
+
+    @CacheEvict(cacheNames = "url-access", key = "#shortCode")
+    public void evictUrlAccessCache(String shortCode) {
+        log.debug("Evicted url-access cache for short code: {}", shortCode);
+    }
 }

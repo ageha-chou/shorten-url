@@ -74,6 +74,10 @@ public class UrlInfo {
     @Column
     private LocalDateTime createdDatetime;
 
+    /** Timestamp when the short URL was last updated (UTC). */
+    @Column
+    private LocalDateTime updatedDatetime;
+
     /** Last time this short URL was accessed for redirection (UTC). */
     @Column
     private LocalDateTime lastAccessDatetime;

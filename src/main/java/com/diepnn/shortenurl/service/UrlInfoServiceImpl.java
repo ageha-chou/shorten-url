@@ -4,6 +4,7 @@ import com.diepnn.shortenurl.common.enums.UrlInfoStatus;
 import com.diepnn.shortenurl.dto.UrlInfoDTO;
 import com.diepnn.shortenurl.dto.UserInfo;
 import com.diepnn.shortenurl.dto.cache.UrlInfoCache;
+import com.diepnn.shortenurl.dto.request.UpdateOriginalUrl;
 import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.entity.UrlInfo;
 import com.diepnn.shortenurl.exception.AliasAlreadyExistsException;
@@ -11,6 +12,7 @@ import com.diepnn.shortenurl.exception.IdCollisionException;
 import com.diepnn.shortenurl.exception.NotFoundException;
 import com.diepnn.shortenurl.mapper.UrlInfoMapper;
 import com.diepnn.shortenurl.repository.UrlInfoRepository;
+import com.diepnn.shortenurl.security.CustomUserDetails;
 import com.diepnn.shortenurl.service.cache.UrlInfoCacheService;
 import com.diepnn.shortenurl.utils.SqlConstraintUtils;
 import lombok.RequiredArgsConstructor;
@@ -114,5 +116,25 @@ public class UrlInfoServiceImpl implements UrlInfoService {
         }
 
         return Collections.unmodifiableList(urls);
+    }
+
+    @Transactional
+    @Override
+    public UrlInfoDTO updateOriginalUrl(Long urlId, UpdateOriginalUrl userRequest, CustomUserDetails userDetails) {
+        UrlInfo urlInfo = urlInfoRepository.findById(urlId)
+                                           .orElseThrow(() -> new NotFoundException("URL not found"));
+
+        Long ownerId = urlInfo.getUserId();
+        Long currentUserId = userDetails.getId();
+        if (ownerId == null || !ownerId.equals(currentUserId)) {
+            throw new IllegalArgumentException("URL not belongs to current user");
+        }
+
+        urlInfo.setOriginalUrl(userRequest.getOriginalUrl());
+        urlInfo.setUpdatedDatetime(LocalDateTime.now());
+        urlInfoRepository.save(urlInfo);
+        urlInfoCacheService.evictUserUrlsCache(currentUserId);
+        urlInfoCacheService.evictUrlAccessCache(urlInfo.getShortCode());
+        return urlInfoMapper.toDto(urlInfo);
     }
 }

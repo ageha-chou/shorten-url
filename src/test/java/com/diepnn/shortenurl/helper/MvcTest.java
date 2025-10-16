@@ -23,7 +23,7 @@ import java.lang.annotation.Target;
 @WebMvcTest(excludeAutoConfiguration = SecurityAutoConfiguration.class)
 @Import({JacksonConfig.class, GlobalExceptionHandler.class})
 @ActiveProfiles("test")
-public @interface ControllerMvcTest {
+public @interface MvcTest {
     /**
      * Specify which controller to load for this test.
      * This is aliased to the 'controllers' attribute of @WebMvcTest.

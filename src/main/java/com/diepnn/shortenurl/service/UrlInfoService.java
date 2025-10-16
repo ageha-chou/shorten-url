@@ -3,8 +3,9 @@ package com.diepnn.shortenurl.service;
 import com.diepnn.shortenurl.dto.UrlInfoDTO;
 import com.diepnn.shortenurl.dto.UserInfo;
 import com.diepnn.shortenurl.dto.cache.UrlInfoCache;
+import com.diepnn.shortenurl.dto.request.UpdateOriginalUrl;
 import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
-import com.diepnn.shortenurl.exception.TooManyRequestException;
+import com.diepnn.shortenurl.security.CustomUserDetails;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,7 +20,7 @@ public interface UrlInfoService {
      * @param userRequest contains the original URL and alias (optional)
      * @return a generated short URL
      */
-    UrlInfoDTO create(UrlInfoRequest userRequest, UserInfo userInfo, Long userId) throws TooManyRequestException;
+    UrlInfoDTO create(UrlInfoRequest userRequest, UserInfo userInfo, Long userId);
 
     /**
      * Find url info by short code and cache it.
@@ -35,5 +36,21 @@ public interface UrlInfoService {
      */
     void updateLastAccessDatetimeByIdAsync(Long urlId, LocalDateTime lastAccessDatetime);
 
+    /**
+     * Find all url info by user id.
+     *
+     * @param userId authenticated user id
+     * @return url info list
+     */
     List<UrlInfoDTO> findAllByUserId(Long userId);
+
+    /**
+     * Update original url.
+     *
+     * @param urlId url info id
+     * @param userRequest contains the original URL
+     * @param userDetails user information
+     * @return the updated url info
+     */
+    UrlInfoDTO updateOriginalUrl(Long urlId, UpdateOriginalUrl userRequest, CustomUserDetails userDetails);
 }

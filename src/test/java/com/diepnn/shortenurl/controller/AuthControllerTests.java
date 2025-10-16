@@ -2,7 +2,7 @@ package com.diepnn.shortenurl.controller;
 
 import com.diepnn.shortenurl.dto.request.AccessTokenRequest;
 import com.diepnn.shortenurl.helper.BaseControllerTest;
-import com.diepnn.shortenurl.helper.ControllerMvcTest;
+import com.diepnn.shortenurl.helper.MvcTest;
 import com.diepnn.shortenurl.security.JwtService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Nested;
@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@ControllerMvcTest(AuthController.class)
+@MvcTest(AuthController.class)
 public class AuthControllerTests extends BaseControllerTest {
     private static final String LOGIN_ENDPOINT = "/api/v1/auth/access-token";
 
