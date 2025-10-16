@@ -1,18 +1,15 @@
 package com.diepnn.shortenurl.dto.request;
 
 import com.diepnn.shortenurl.common.annotation.validation.OriginalUrl;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
-public class UrlInfoRequest {
+@NoArgsConstructor
+public class UpdateOriginalUrl {
     @OriginalUrl
     private String originalUrl;
-
-    @Pattern(regexp = "^(?!-)([A-Za-z0-9-]{5,30})(?<!-)$", message = "Alias must be 5-30 chars, letters, digits or hyphens")
-    private String alias;
 }

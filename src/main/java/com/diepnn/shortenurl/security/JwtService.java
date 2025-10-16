@@ -78,13 +78,24 @@ public class JwtService {
         }
     }
 
-    // Generic claim extractor
+    /**
+     * Extract the given claim from the JWT token.
+     *
+     * @param token JWT token
+     * @param claimsResolver function to resolve the claim from the JWT token
+     * @return resolved claim
+     */
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
     }
 
-    // Parse and validate token
+    /**
+     * Extract all claims from the JWT token.
+     *
+     * @param token JWT token
+     * @return all claims from the JWT token
+     */
     private Claims extractAllClaims(String token) {
         return jwtParserBuilder.build()
                                .parseSignedClaims(token)
@@ -98,20 +109,6 @@ public class JwtService {
 
     private Date extractExpiration(String token) {
         return extractClaim(token, Claims::getExpiration);
-    }
-
-    /**
-     * Check if the given JWT token is expired.
-     *
-     * @param token JWT token.
-     * @return true if the token is expired, false otherwise.
-     */
-    private boolean isExpired(String token) {
-        Date expiration = jwtParserBuilder.build()
-                                          .parseSignedClaims(token)
-                                          .getPayload()
-                                          .getExpiration();
-        return expiration.before(new Date());
     }
 
     private String getSubject(Authentication authentication) {

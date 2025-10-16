@@ -335,7 +335,7 @@ public class SlidingWindowRateLimiterServiceIT {
         rateLimiterService.isAllowed(testClientKey);
 
         // Wait for next sub-window
-        Thread.sleep(subWindowSize + 100);
+        Thread.sleep(subWindowSize);
 
         rateLimiterService.isAllowed(testClientKey);
 

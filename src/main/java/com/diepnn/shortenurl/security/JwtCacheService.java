@@ -18,12 +18,13 @@ public class JwtCacheService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
 
-    private static final String CACHE_FORMAT = "authenticated::%s";
+    private static final String CACHE_FORMAT = "authenticated-user::%s";
 
     /**
      * Adds a new entry to the cache.
      *
-     * @param username
+     * @param username username of the authenticated user
+     * @param userDetails user details object
      */
     public void add(String username, CustomUserDetails userDetails) {
         if (userDetails == null) return;
@@ -35,7 +36,7 @@ public class JwtCacheService {
     /**
      * Checks if the cache contains an entry for the given username.
      *
-     * @param username
+     * @param username username of the authenticated user
      * @return cached user, or null if not found.
      */
     public CustomUserDetails getCacheUser(String username) {
@@ -45,7 +46,7 @@ public class JwtCacheService {
     /**
      * Removes the entry for the given username from the cache.
      *
-     * @param username
+     * @param username username of the authenticated user
      */
     public void remove(String username) {
         redisTemplate.delete(String.format(CACHE_FORMAT, username));

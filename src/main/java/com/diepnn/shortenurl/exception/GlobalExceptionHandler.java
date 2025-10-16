@@ -93,7 +93,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(TooManyRequestException.class)
     @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
-    public BaseResponseWrapper<Void> handleNoHandlerFoundException(TooManyRequestException ex) {
+    public BaseResponseWrapper<Void> handleTooManyRequestException(TooManyRequestException ex) {
         return ResponseWrapperBuilder.withNoData(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
     }
 

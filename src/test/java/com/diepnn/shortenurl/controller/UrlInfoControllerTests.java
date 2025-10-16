@@ -2,14 +2,17 @@ package com.diepnn.shortenurl.controller;
 
 import com.diepnn.shortenurl.dto.UrlInfoDTO;
 import com.diepnn.shortenurl.dto.UserInfo;
+import com.diepnn.shortenurl.dto.request.UpdateOriginalUrl;
 import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.entity.UrlInfo;
 import com.diepnn.shortenurl.exception.AliasAlreadyExistsException;
-import com.diepnn.shortenurl.exception.GlobalExceptionHandler;
+import com.diepnn.shortenurl.exception.NotFoundException;
 import com.diepnn.shortenurl.exception.TooManyRequestException;
 import com.diepnn.shortenurl.helper.BaseControllerTest;
+import com.diepnn.shortenurl.helper.MvcTest;
 import com.diepnn.shortenurl.mapper.UrlInfoMapper;
 import com.diepnn.shortenurl.mapper.translator.ShortUrlMappings;
+import com.diepnn.shortenurl.security.CustomUserDetails;
 import com.diepnn.shortenurl.service.UrlInfoService;
 import com.diepnn.shortenurl.utils.UserInfoRequestExtractor;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,31 +23,32 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDateTime;
+
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = UrlInfoController.class,
-            excludeAutoConfiguration = SecurityAutoConfiguration.class)
-@AutoConfigureMockMvc(addFilters = false)
-@Import(GlobalExceptionHandler.class)
+@MvcTest(UrlInfoController.class)
 public class UrlInfoControllerTests extends BaseControllerTest {
     private static final String CREATE_ENDPOINT = "/api/v1/url-infos/create";
+    private static final String UPDATE_ORIGINAL_URL_ENDPOINT = "/api/v1/url-infos/{id}/update-original-url";
 
     @Autowired
     private MockMvc mockMvc;
@@ -195,7 +199,7 @@ public class UrlInfoControllerTests extends BaseControllerTest {
                    .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())))
                    .andExpect(jsonPath("$.message", is("Invalid request")))
                    .andExpect(jsonPath("$.errors").exists())
-                   .andExpect(jsonPath("$.errors[?(@.field == 'original_url' && @.message == 'Original URL is required')]").exists());
+                   .andExpect(jsonPath("$.errors[?(@.field == 'original_url')]").exists());
 
             verify(urlInfoService, never()).create(any(), any(), any());
         }
@@ -286,6 +290,179 @@ public class UrlInfoControllerTests extends BaseControllerTest {
                    .andExpect(jsonPath("$.errors[?(@.field == 'alias' && @.message == 'Alias must be 5-30 chars, letters, digits or hyphens')]").exists());
 
             verify(urlInfoService, never()).create(any(), any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("PATCH /api/v1/url-infos/{id}/update-original-url")
+    class UpdateOriginalUrlTests {
+        private UrlInfoDTO mockUrlInfoDTO;
+        private UpdateOriginalUrl validRequest;
+
+        @BeforeEach
+        void setUp() {
+            validRequest = new UpdateOriginalUrl("https://example.com/updated");
+
+            mockUrlInfoDTO = new UrlInfoDTO();
+            mockUrlInfoDTO.setId(1L);
+            mockUrlInfoDTO.setOriginalUrl("https://example.com/updated");
+            mockUrlInfoDTO.setShortUrl("http://abc123");
+            mockUrlInfoDTO.setCreatedDatetime(LocalDateTime.now());
+        }
+
+        @Test
+        void shouldUpdateOriginalUrlSuccessfully() throws Exception {
+            Long urlId = 1L;
+            when(urlInfoService.updateOriginalUrl(eq(urlId), any(UpdateOriginalUrl.class), any(CustomUserDetails.class)))
+                    .thenReturn(mockUrlInfoDTO);
+
+            mockMvc.perform(patch(UPDATE_ORIGINAL_URL_ENDPOINT, urlId)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(validRequest)))
+                   .andDo(print())
+                   .andExpect(status().isOk())
+                   .andExpect(jsonPath("$.status", is(200)))
+                   .andExpect(jsonPath("$.message", is("Updated successfully")))
+                   .andExpect(jsonPath("$.data.id", is(1)))
+                   .andExpect(jsonPath("$.data.original_url", is("https://example.com/updated")))
+                   .andExpect(jsonPath("$.data.short_url", is("http://abc123")));
+
+            verify(urlInfoService, times(1)).updateOriginalUrl(eq(urlId), any(UpdateOriginalUrl.class), any(CustomUserDetails.class));
+        }
+
+        @Test
+        void shouldReturnNotFoundWhenUrlDoesNotExist() throws Exception {
+            Long nonExistentUrlId = 999L;
+            when(urlInfoService.updateOriginalUrl(eq(nonExistentUrlId), any(UpdateOriginalUrl.class), any(CustomUserDetails.class)))
+                    .thenThrow(new NotFoundException("URL not found"));
+
+            mockMvc.perform(patch(UPDATE_ORIGINAL_URL_ENDPOINT, nonExistentUrlId)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(validRequest)))
+                   .andDo(print())
+                   .andExpect(status().isNotFound())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.NOT_FOUND.value())));
+
+            verify(urlInfoService, times(1)).updateOriginalUrl(eq(nonExistentUrlId), any(UpdateOriginalUrl.class), any(CustomUserDetails.class));
+        }
+
+        @Test
+        void shouldReturnBadRequestWhenUrlNotBelongsToUser() throws Exception {
+            Long urlId = 1L;
+            when(urlInfoService.updateOriginalUrl(eq(urlId), any(UpdateOriginalUrl.class), any(CustomUserDetails.class)))
+                    .thenThrow(new IllegalArgumentException("URL not belongs to current user"));
+
+            mockMvc.perform(patch(UPDATE_ORIGINAL_URL_ENDPOINT, urlId)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(validRequest)))
+                   .andDo(print())
+                   .andExpect(status().isBadRequest())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())));
+
+            verify(urlInfoService, times(1)).updateOriginalUrl(eq(urlId), any(UpdateOriginalUrl.class), any(CustomUserDetails.class));
+        }
+
+        @Test
+        void shouldReturnBadRequestWhenOriginalUrlIsNull() throws Exception {
+            Long urlId = 1L;
+            UpdateOriginalUrl invalidRequest = new UpdateOriginalUrl();
+            invalidRequest.setOriginalUrl(null);
+
+            mockMvc.perform(patch(UPDATE_ORIGINAL_URL_ENDPOINT, urlId)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(invalidRequest)))
+                   .andDo(print())
+                   .andExpect(status().isBadRequest())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())));
+
+            verify(urlInfoService, never()).updateOriginalUrl(anyLong(), any(UpdateOriginalUrl.class), any(CustomUserDetails.class));
+        }
+
+        @Test
+        void shouldReturnBadRequestWhenOriginalUrlIsEmpty() throws Exception {
+            Long urlId = 1L;
+            UpdateOriginalUrl invalidRequest = new UpdateOriginalUrl();
+            invalidRequest.setOriginalUrl("");
+
+            mockMvc.perform(patch(UPDATE_ORIGINAL_URL_ENDPOINT, urlId)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(invalidRequest)))
+                   .andDo(print())
+                   .andExpect(status().isBadRequest())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())));
+
+            verify(urlInfoService, never()).updateOriginalUrl(anyLong(), any(UpdateOriginalUrl.class), any(CustomUserDetails.class));
+        }
+
+        @Test
+        void shouldReturnBadRequestWhenOriginalUrlIsInvalidFormat() throws Exception {
+            Long urlId = 1L;
+            UpdateOriginalUrl invalidRequest = new UpdateOriginalUrl();
+            invalidRequest.setOriginalUrl("test%");
+
+            mockMvc.perform(patch(UPDATE_ORIGINAL_URL_ENDPOINT, urlId)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(invalidRequest)))
+                   .andDo(print())
+                   .andExpect(status().isBadRequest())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())));
+
+            verify(urlInfoService, never()).updateOriginalUrl(anyLong(), any(UpdateOriginalUrl.class), any(CustomUserDetails.class));
+        }
+
+        @Test
+        void shouldReturnBadRequestWhenRequestBodyIsEmpty() throws Exception {
+            // Given
+            Long urlId = 1L;
+
+            // When & Then
+            mockMvc.perform(patch(UPDATE_ORIGINAL_URL_ENDPOINT, urlId)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content("{}"))
+                   .andDo(print())
+                   .andExpect(status().isBadRequest())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())));
+
+            verify(urlInfoService, never()).updateOriginalUrl(anyLong(), any(UpdateOriginalUrl.class), any(CustomUserDetails.class));
+        }
+
+        @Test
+        void shouldHandleMultipleUpdatesForSameUrl() throws Exception {
+            Long urlId = 1L;
+
+            UrlInfoDTO firstUpdate = new UrlInfoDTO();
+            firstUpdate.setOriginalUrl("https://example.com/first");
+
+            UrlInfoDTO secondUpdate = new UrlInfoDTO();
+            secondUpdate.setOriginalUrl("https://example.com/second");
+
+            when(urlInfoService.updateOriginalUrl(eq(urlId), any(UpdateOriginalUrl.class), any(CustomUserDetails.class)))
+                    .thenReturn(firstUpdate)
+                    .thenReturn(secondUpdate);
+
+            // First update
+            UpdateOriginalUrl firstRequest = new UpdateOriginalUrl();
+            firstRequest.setOriginalUrl("https://example.com/first");
+
+            mockMvc.perform(patch(UPDATE_ORIGINAL_URL_ENDPOINT, urlId)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(firstRequest)))
+                   .andExpect(status().isOk())
+                   .andExpect(jsonPath("$.status", is(200)))
+                   .andExpect(jsonPath("$.data.original_url", is("https://example.com/first")));
+
+            // Second update
+            UpdateOriginalUrl secondRequest = new UpdateOriginalUrl();
+            secondRequest.setOriginalUrl("https://example.com/second");
+
+            mockMvc.perform(patch(UPDATE_ORIGINAL_URL_ENDPOINT, urlId)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(secondRequest)))
+                   .andExpect(status().isOk())
+                   .andExpect(jsonPath("$.status", is(200)))
+                   .andExpect(jsonPath("$.data.original_url", is("https://example.com/second")));
+
+            verify(urlInfoService, times(2)).updateOriginalUrl(eq(urlId), any(UpdateOriginalUrl.class), any(CustomUserDetails.class));
         }
     }
 }

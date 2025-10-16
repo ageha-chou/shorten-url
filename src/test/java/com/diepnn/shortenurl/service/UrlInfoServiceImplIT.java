@@ -1,16 +1,21 @@
 package com.diepnn.shortenurl.service;
 
 import com.diepnn.shortenurl.common.enums.UrlInfoStatus;
+import com.diepnn.shortenurl.dto.UrlInfoDTO;
 import com.diepnn.shortenurl.dto.UserInfo;
 import com.diepnn.shortenurl.dto.cache.UrlInfoCache;
+import com.diepnn.shortenurl.dto.request.UpdateOriginalUrl;
 import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.entity.UrlInfo;
+import com.diepnn.shortenurl.entity.Users;
 import com.diepnn.shortenurl.exception.AliasAlreadyExistsException;
 import com.diepnn.shortenurl.exception.NotFoundException;
 import com.diepnn.shortenurl.repository.UrlInfoRepository;
+import com.diepnn.shortenurl.repository.UsersRepository;
+import com.diepnn.shortenurl.security.CustomUserDetails;
+import com.diepnn.shortenurl.service.cache.UrlInfoCacheService;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -18,15 +23,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.CacheManager;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,6 +48,9 @@ import static org.mockito.Mockito.when;
 public class UrlInfoServiceImplIT {
     @Autowired
     private CacheManager cacheManager;
+
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
 
     private UrlInfoCache mockUrlInfoCache;
     private String validShortCode;
@@ -53,6 +65,10 @@ public class UrlInfoServiceImplIT {
 
         // Clear cache before each test
         cacheManager.getCache("url-access").clear();
+        Set<String> keys = redisTemplate.keys("authenticated-user::*");
+        if (!keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
     }
 
     private UserInfo mockUserInfo(String ipAddress, String userAgent) {
@@ -70,7 +86,7 @@ public class UrlInfoServiceImplIT {
         private UrlInfoService urlService;
 
         @Test
-        void findByShortCodeCache_FirstCall_CallsRepositoryAndCachesResult() {
+        void firstCall_CallsRepositoryAndCachesResult() {
             // Given
             when(urlInfoRepository.findUrlInfoCacheByShortCode(validShortCode)).thenReturn(Optional.of(mockUrlInfoCache));
 
@@ -86,7 +102,7 @@ public class UrlInfoServiceImplIT {
         }
 
         @Test
-        void findByShortCodeCache_SecondCall_ReturnsCachedResultWithoutRepositoryCall() {
+        void secondCall_ReturnsCachedResultWithoutRepositoryCall() {
             // Given
             when(urlInfoRepository.findUrlInfoCacheByShortCode(validShortCode)).thenReturn(Optional.of(mockUrlInfoCache));
 
@@ -106,7 +122,7 @@ public class UrlInfoServiceImplIT {
         }
 
         @Test
-        void findByShortCodeCache_CacheEviction_CallsRepositoryAgain() {
+        void cacheEviction_CallsRepositoryAgain() {
             // Given
             when(urlInfoRepository.findUrlInfoCacheByShortCode(validShortCode))
                     .thenReturn(Optional.of(mockUrlInfoCache));
@@ -125,7 +141,7 @@ public class UrlInfoServiceImplIT {
         }
 
         @Test
-        void findByShortCodeCache_DifferentShortCodes_EachCallsRepository() {
+        void differentShortCodes_EachCallsRepository() {
             // Given
             String shortCode1 = "test1";
             String shortCode2 = "test2";
@@ -149,19 +165,18 @@ public class UrlInfoServiceImplIT {
         }
 
         @Test
-        void findByShortCodeCache_whenShortCodeIsNotExisted_returnNotFoundException() {
+        void whenShortCodeIsNotExisted_returnNotFoundException() {
             assertThrows(NotFoundException.class, () -> urlService.findByShortCodeCache("xyz"));
         }
 
         @Test
-        void findByShortCodeCache_whenShortCodeIsNullOrBlank_throwIllegalArgumentException() {
+        void whenShortCodeIsNullOrBlank_throwIllegalArgumentException() {
             assertThrows(IllegalArgumentException.class, () -> urlService.findByShortCodeCache(null));
             assertThrows(IllegalArgumentException.class, () -> urlService.findByShortCodeCache(" "));
         }
     }
 
     @Nested
-    @DisplayName("POST /api/v1/url-infos/create")
     class CreateUrlInfo {
         @Autowired
         private UrlInfoRepository urlInfoRepository;
@@ -183,19 +198,164 @@ public class UrlInfoServiceImplIT {
         }
 
         @Test
-        void create_ShortCodeIsExisted_ThrowsException() {
-            // Given
+        void shortCodeIsExisted_ThrowsException() {
             UserInfo userInfo = mockUserInfo("127.0.0.1", "Mozilla/5.0");
             UrlInfoRequest userRequest = new UrlInfoRequest("https://netflix.com", "abcde");
             String expectedMessage = String.format("The alias '%s' is already in use.", userRequest.getAlias());
             Long userId = 1L;
 
-            // When
             AliasAlreadyExistsException ex = assertThrows(AliasAlreadyExistsException.class,
                                                           () -> urlInfoService.create(userRequest, userInfo, userId));
 
-            // Then
             assertEquals(expectedMessage, ex.getMessage());
+        }
+    }
+
+    @Nested
+    class UpdateUrlInfo {
+        @Autowired
+        private UrlInfoService urlInfoService;
+
+        @Autowired
+        private UrlInfoRepository urlInfoRepository;
+
+        @Autowired
+        private UsersRepository usersRepository;
+
+        @Autowired
+        private UrlInfoCacheService urlInfoCacheService;
+
+        private CustomUserDetails userDetails;
+        private CustomUserDetails otherUserDetails;
+        private UrlInfo testUrlInfo;
+
+        @BeforeEach
+        void setUp() {
+            // Setup user details
+            Users testuser = Users.builder().username("testuser").build();
+            Users otheruser = Users.builder().username("otheruser").build();
+
+            userDetails = CustomUserDetails.create(usersRepository.saveAndFlush(testuser));
+            otherUserDetails = CustomUserDetails.create(usersRepository.saveAndFlush(otheruser));
+
+            // Create test URL info
+            testUrlInfo = new UrlInfo();
+            testUrlInfo.setId(1000L);
+            testUrlInfo.setUserId(userDetails.getId());
+            testUrlInfo.setOriginalUrl("https://example.com/original");
+            testUrlInfo.setShortCode("abc123");
+            testUrlInfo.setCreatedDatetime(LocalDateTime.now());
+            testUrlInfo.setUpdatedDatetime(LocalDateTime.now());
+            testUrlInfo = urlInfoRepository.saveAndFlush(testUrlInfo);
+        }
+
+        @Test
+        void shouldUpdateOriginalUrlSuccessfully() throws InterruptedException {
+            String newOriginalUrl = "https://example.com/updated";
+            UpdateOriginalUrl request = new UpdateOriginalUrl(newOriginalUrl);
+            LocalDateTime beforeUpdate = LocalDateTime.now();
+
+            Thread.sleep(100);
+
+            UrlInfoDTO result = urlInfoService.updateOriginalUrl(testUrlInfo.getId(), request, userDetails);
+
+            assertNotNull(result);
+            assertEquals(newOriginalUrl, result.getOriginalUrl(), "Original URL should be updated");
+
+            // Verify database update
+            UrlInfo updatedUrlInfo = urlInfoRepository.findById(testUrlInfo.getId()).orElseThrow();
+            assertEquals(newOriginalUrl, updatedUrlInfo.getOriginalUrl(), "Original URL in DB should be updated");
+            assertTrue(updatedUrlInfo.getUpdatedDatetime().isAfter(beforeUpdate));
+            assertEquals(userDetails.getId(), updatedUrlInfo.getUserId());
+        }
+
+        @Test
+        void shouldThrowNotFoundExceptionWhenUrlDoesNotExist() {
+            Long nonExistentUrlId = 99999L;
+            UpdateOriginalUrl request = new UpdateOriginalUrl("https://example.com/new");
+
+            NotFoundException ex = assertThrows(NotFoundException.class,
+                                                () -> urlInfoService.updateOriginalUrl(nonExistentUrlId, request, userDetails));
+            assertEquals("URL not found", ex.getMessage());
+        }
+
+        @Test
+        void shouldThrowIllegalArgumentExceptionWhenUrlBelongsToDifferentUser() {
+            UpdateOriginalUrl request = new UpdateOriginalUrl("https://example.com/new");
+
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                                                       () -> urlInfoService.updateOriginalUrl(testUrlInfo.getId(), request, otherUserDetails));
+
+            assertEquals("URL not belongs to current user", ex.getMessage());
+        }
+
+        @Test
+        void shouldNotUpdateUrlWhenUnauthorizedUser() {
+            String originalUrlBeforeUpdate = testUrlInfo.getOriginalUrl();
+            UpdateOriginalUrl request = new UpdateOriginalUrl("https://example.com/malicious");
+
+            assertThrows(IllegalArgumentException.class, () -> urlInfoService.updateOriginalUrl(testUrlInfo.getId(), request, otherUserDetails));
+
+            // Verify URL was not modified
+            UrlInfo unchangedUrlInfo = urlInfoRepository.findById(testUrlInfo.getId()).orElseThrow();
+            assertEquals(originalUrlBeforeUpdate, unchangedUrlInfo.getOriginalUrl());
+        }
+
+        @Test
+        void shouldEvictCacheAfterUpdate() {
+            // Given
+            String newOriginalUrl = "https://example.com/cache-test";
+            UpdateOriginalUrl request = new UpdateOriginalUrl(newOriginalUrl);
+
+            // Pre-populate cache by calling the cacheable methods
+            urlInfoCacheService.findAllByUserId(userDetails.getId());
+            urlInfoCacheService.findByShortCodeCache(testUrlInfo.getShortCode());
+
+            // When
+            urlInfoService.updateOriginalUrl(testUrlInfo.getId(), request, userDetails);
+
+            // Then
+            // Verify cache was evicted by checking that subsequent calls fetch fresh data
+            List<UrlInfoDTO> userUrls = urlInfoCacheService.findAllByUserId(userDetails.getId());
+            UrlInfoCache urlCache = urlInfoCacheService.findByShortCodeCache(testUrlInfo.getShortCode());
+
+            // Verify the data is fresh (contains the updated URL)
+            assertTrue(userUrls.stream().anyMatch(url -> url.getOriginalUrl().equals(newOriginalUrl)));
+            assertEquals(newOriginalUrl, urlCache.originalUrl());
+        }
+
+        @Test
+        void shouldUpdateTimestampCorrectly() {
+            LocalDateTime originalTimestamp = testUrlInfo.getUpdatedDatetime();
+            UpdateOriginalUrl request = new UpdateOriginalUrl("https://example.com/timestamp-test");
+
+            // Small delay to ensure timestamp difference
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
+            urlInfoService.updateOriginalUrl(testUrlInfo.getId(), request, userDetails);
+
+            UrlInfo updatedUrlInfo = urlInfoRepository.findById(testUrlInfo.getId()).orElseThrow();
+            assertTrue(updatedUrlInfo.getUpdatedDatetime().isAfter(originalTimestamp));
+        }
+
+        @Test
+        void shouldPreserveOtherFieldsWhenUpdating() {
+            String originalShortCode = testUrlInfo.getShortCode();
+            Long originalUserId = testUrlInfo.getUserId();
+            LocalDateTime originalCreatedDatetime = testUrlInfo.getCreatedDatetime();
+
+            UpdateOriginalUrl request = new UpdateOriginalUrl("https://example.com/preserve-test");
+
+            urlInfoService.updateOriginalUrl(testUrlInfo.getId(), request, userDetails);
+
+            UrlInfo updatedUrlInfo = urlInfoRepository.findById(testUrlInfo.getId()).orElseThrow();
+            assertEquals(originalShortCode, updatedUrlInfo.getShortCode());
+            assertEquals(originalUserId, updatedUrlInfo.getUserId());
+            assertEquals(originalCreatedDatetime, updatedUrlInfo.getCreatedDatetime());
         }
     }
 }

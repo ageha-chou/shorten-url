@@ -1,5 +1,6 @@
 package com.diepnn.shortenurl.config;
 
+import com.diepnn.shortenurl.security.CustomAuthenticationEntryPoint;
 import com.diepnn.shortenurl.security.CustomOAuth2UserService;
 import com.diepnn.shortenurl.security.JwtCacheService;
 import com.diepnn.shortenurl.security.JwtService;
@@ -27,6 +28,7 @@ import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResp
 import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequest;
 import org.springframework.security.oauth2.client.endpoint.RestClientAuthorizationCodeTokenResponseClient;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -92,7 +94,8 @@ public class SecurityConfig {
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
             .authenticationManager(authenticationManager())
             .formLogin(AbstractHttpConfigurer::disable)
-            .csrf(AbstractHttpConfigurer::disable);
+            .csrf(AbstractHttpConfigurer::disable)
+            .exceptionHandling(exception -> exception.authenticationEntryPoint(authenticationEntryPoint()));
 
         return http.build();
     }
@@ -122,7 +125,7 @@ public class SecurityConfig {
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService, JwtCacheService jwtCacheService,
                                                            UserDetailsService userDetailsService) {
-        return new JwtAuthenticationFilter(jwtService, jwtCacheService, userDetailsService);
+        return new JwtAuthenticationFilter(jwtService, jwtCacheService, userDetailsService, authenticationEntryPoint());
     }
 
     @Bean
@@ -131,6 +134,11 @@ public class SecurityConfig {
         daoAuthenticationProvider.setPasswordEncoder(bCryptPasswordEncoder);
         daoAuthenticationProvider.setHideUserNotFoundExceptions(false);
         return daoAuthenticationProvider;
+    }
+
+    @Bean
+    public AuthenticationEntryPoint authenticationEntryPoint() {
+        return new CustomAuthenticationEntryPoint();
     }
 
     private DaoAuthenticationProvider swaggerAuthenticationProvider(UserDetailsService swaggerUser) {
