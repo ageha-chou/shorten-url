@@ -157,22 +157,27 @@ public class SlidingWindowRateLimiterServiceIT {
     void isAllowed_shouldHandleConcurrentRequests_withoutExceedingLimit() throws InterruptedException {
         // Given
         long limit = props.getLimit();
-        int threadCount = 50;
+        int threadCount = 30; // More threads than limit
         int requestsPerThread = 2;
+        int totalRequests = threadCount * requestsPerThread; // 60 total requests
+
         AtomicInteger allowedCount = new AtomicInteger(0);
+        AtomicInteger deniedCount = new AtomicInteger(0);
 
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch doneLatch = new CountDownLatch(threadCount);
 
-        // When - multiple threads making concurrent requests
+        // When
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
                 try {
-                    startLatch.await(); // Wait for all threads to be ready
+                    startLatch.await();
                     for (int j = 0; j < requestsPerThread; j++) {
                         if (rateLimiterService.isAllowed(testClientKey)) {
                             allowedCount.incrementAndGet();
+                        } else {
+                            deniedCount.incrementAndGet();
                         }
                     }
                 } catch (InterruptedException e) {
@@ -183,14 +188,20 @@ public class SlidingWindowRateLimiterServiceIT {
             });
         }
 
-        startLatch.countDown(); // Start all threads simultaneously
+        startLatch.countDown();
         boolean completed = doneLatch.await(10, TimeUnit.SECONDS);
         executor.shutdown();
 
         // Then
         assertTrue(completed, "All threads should complete within timeout");
+        assertEquals(totalRequests, allowedCount.get() + deniedCount.get(),
+                     "Total requests should equal allowed + denied");
+
+        // The key assertion: some requests MUST be denied
         assertTrue(allowedCount.get() <= limit,
                    "Allowed count (" + allowedCount.get() + ") should not exceed limit (" + limit + ")");
+        assertTrue(deniedCount.get() > 0,
+                   "Some requests should be denied when exceeding limit. Denied: " + deniedCount.get());
     }
 
     @Test

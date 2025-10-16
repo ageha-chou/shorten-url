@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
  * The controller for managing users.
  */
 @RestController
-@RequestMapping("api/v1/users")
+@RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
 @Tag(name = "User", description = "User API")
 public class UsersController {
@@ -62,7 +62,10 @@ public class UsersController {
     @Operation(summary = "Update user information",
                security = @SecurityRequirement(name = "Bearer Authentication"))
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Updated successfully", useReturnTypeSchema = true)
+            @ApiResponse(responseCode = "200", description = "Updated successfully", useReturnTypeSchema = true),
+            @ApiResponse(responseCode = "400", description = "Invalid request",
+                         content = @Content(schema = @Schema(implementation = InvalidResponseWrapper.class))
+            ),
     })
     @PatchMapping("/update")
     @ResponseStatus(HttpStatus.OK)
