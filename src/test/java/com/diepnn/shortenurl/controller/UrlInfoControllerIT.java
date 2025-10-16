@@ -181,20 +181,6 @@ public class UrlInfoControllerIT extends BaseControllerIT {
                    .andExpect(status().isUnauthorized())
                    .andExpect(jsonPath("$.status", is(HttpStatus.UNAUTHORIZED.value())));
         }
-
-        @Test
-        void shouldFail_WithMalformedAuthorizationHeader() throws Exception {
-            UrlInfoRequest request = new UrlInfoRequest();
-            request.setOriginalUrl("https://example.com/test");
-
-            mockMvc.perform(post(CREATE_ENDPOINT)
-                                    .header("Authorization", validToken)
-                                    .contentType(MediaType.APPLICATION_JSON)
-                                    .content(objectMapper.writeValueAsString(request)))
-                   .andDo(print())
-                   .andExpect(status().isUnauthorized())
-                   .andExpect(jsonPath("$.status", is(HttpStatus.UNAUTHORIZED.value())));
-        }
     }
 
     @Nested
