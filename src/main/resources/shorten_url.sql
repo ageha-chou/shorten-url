@@ -50,6 +50,7 @@ create table url_info (
 	created_datetime timestamp,
     updated_datetime timestamp,
 	last_access_datetime timestamp,
+	deleted_datetime timestamp,
 	primary key (id),
     constraint fk_url_info_users foreign key (created_by) references users(id),
     unique index uidx_url_info_original_url(short_code)

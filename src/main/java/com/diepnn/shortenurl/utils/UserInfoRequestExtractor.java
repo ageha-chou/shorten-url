@@ -6,7 +6,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
 import java.util.Locale;
 
 import static com.diepnn.shortenurl.common.constant.HttpHeadersConstants.FORWARDED_HEADER;
@@ -106,7 +105,7 @@ public class UserInfoRequestExtractor {
         return UserInfo.builder()
                        .ipAddress(userIp)
                        .userAgent(userAgent)
-                       .visitedDatetime(LocalDateTime.now())
+                       .visitedDatetime(DateUtils.nowTruncatedToSeconds())
                        .build();
     }
 }

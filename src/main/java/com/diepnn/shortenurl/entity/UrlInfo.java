@@ -82,6 +82,10 @@ public class UrlInfo {
     @Column
     private LocalDateTime lastAccessDatetime;
 
+    /** Timestamp when the short URL was deleted (UTC). */
+    @Column
+    private LocalDateTime deletedDatetime;
+
     /**
      * The user's id who created the short URL.
      */

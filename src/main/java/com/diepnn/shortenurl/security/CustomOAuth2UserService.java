@@ -8,6 +8,7 @@ import com.diepnn.shortenurl.repository.UsersRepository;
 import com.diepnn.shortenurl.security.oauth2.OAuth2UserInfo;
 import com.diepnn.shortenurl.security.oauth2.OAuth2UserInfoFactory;
 import com.diepnn.shortenurl.security.oauth2.provider.google.GoogleOAuth2UserInfo;
+import com.diepnn.shortenurl.utils.DateUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
@@ -18,7 +19,6 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -94,15 +94,15 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         AuthProvider authProvider = AuthProvider.builder()
                                                 .providerType(ProviderType.fromValue(userRequest.getClientRegistration().getRegistrationId()))
                                                 .providerUserId(oauth2UserInfo.getId())
-                                                .createdDatetime(LocalDateTime.now())
-                                                .lastAccessDatetime(LocalDateTime.now())
+                                                .createdDatetime(DateUtils.nowTruncatedToSeconds())
+                                                .lastAccessDatetime(DateUtils.nowTruncatedToSeconds())
                                                 .build();
 
         Users user = Users.builder()
                           .email(oauth2UserInfo.getEmail())
                           .avatar(oauth2UserInfo.getImageUrl())
                           .status(UsersStatus.ACTIVE)
-                          .createdDatetime(LocalDateTime.now())
+                          .createdDatetime(DateUtils.nowTruncatedToSeconds())
                           .authProviders(List.of(authProvider))
                           .build();
 
@@ -116,7 +116,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     }
 
     private Users updateExistedUser(Users user, AuthProvider oauth2User) {
-        oauth2User.setLastAccessDatetime(LocalDateTime.now());
+        oauth2User.setLastAccessDatetime(DateUtils.nowTruncatedToSeconds());
         return userRepository.save(user);
     }
 }

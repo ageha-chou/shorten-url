@@ -7,7 +7,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum UrlInfoStatus implements PersistableEnum {
     ACTIVE("A"),
-    EXPIRED("E");
+    EXPIRED("E"),
+    DELETED("D");
 
     private final String value;
 

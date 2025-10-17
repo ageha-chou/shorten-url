@@ -14,6 +14,7 @@ import com.diepnn.shortenurl.mapper.UrlInfoMapper;
 import com.diepnn.shortenurl.repository.UrlInfoRepository;
 import com.diepnn.shortenurl.security.CustomUserDetails;
 import com.diepnn.shortenurl.service.cache.UrlInfoCacheService;
+import com.diepnn.shortenurl.utils.DateUtils;
 import com.diepnn.shortenurl.utils.SqlConstraintUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +25,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -75,7 +77,7 @@ public class UrlInfoServiceImplTests {
         mockId = 12345L;
         userId = 123L;
         mockRequest = new UrlInfoRequest("https://example.com", "customAlias");
-        mockUserInfo = new UserInfo("192.168.1.1", "Mozilla/5.0", LocalDateTime.now(), null);
+        mockUserInfo = new UserInfo("192.168.1.1", "Mozilla/5.0", DateUtils.nowTruncatedToSeconds(), null);
 
         mockUrlInfo = UrlInfo.builder()
                              .id(mockId)
@@ -86,7 +88,7 @@ public class UrlInfoServiceImplTests {
                              .userId(userId)
                              .createdByIp("192.168.1.1")
                              .createdByUserAgent("Mozilla/5.0")
-                             .createdDatetime(LocalDateTime.now())
+                             .createdDatetime(DateUtils.nowTruncatedToSeconds())
                              .build();
 
         mockDto = UrlInfoDTO.builder()
@@ -95,7 +97,7 @@ public class UrlInfoServiceImplTests {
                             .status("A")
                             .alias(true)
                             .shortUrl("http://localhost:8080/customalias")
-                            .createdDatetime(LocalDateTime.now())
+                            .createdDatetime(DateUtils.nowTruncatedToSeconds())
                             .build();
     }
 
@@ -138,7 +140,7 @@ public class UrlInfoServiceImplTests {
                                              .shortCode(generatedShortCode)
                                              .createdByIp("192.168.1.1")
                                              .createdByUserAgent("Mozilla/5.0")
-                                             .createdDatetime(LocalDateTime.now())
+                                             .createdDatetime(DateUtils.nowTruncatedToSeconds())
                                              .build();
             UrlInfoDTO expectedDto = UrlInfoDTO.builder()
                                                .id(mockId)
@@ -146,7 +148,7 @@ public class UrlInfoServiceImplTests {
                                                .status(UrlInfoStatus.ACTIVE.getValue())
                                                .alias(false)
                                                .shortUrl("http://localhost:8080/" + generatedShortCode)
-                                               .createdDatetime(LocalDateTime.now())
+                                               .createdDatetime(DateUtils.nowTruncatedToSeconds())
                                                .build();
 
             when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenReturn(expectedUrlInfo);
@@ -180,7 +182,7 @@ public class UrlInfoServiceImplTests {
                                      .shortCode(generatedShortCode)
                                      .createdByIp("192.168.1.1")
                                      .createdByUserAgent("Mozilla/5.0")
-                                     .createdDatetime(LocalDateTime.now())
+                                     .createdDatetime(DateUtils.nowTruncatedToSeconds())
                                      .build();
 
             UrlInfoDTO expectedDto = UrlInfoDTO.builder()
@@ -189,7 +191,7 @@ public class UrlInfoServiceImplTests {
                                                .status("A")
                                                .alias(false)
                                                .shortUrl("http://localhost:8080/" + generatedShortCode)
-                                               .createdDatetime(LocalDateTime.now())
+                                               .createdDatetime(DateUtils.nowTruncatedToSeconds())
                                                .build();
 
             when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenReturn(urlInfo);
@@ -286,13 +288,13 @@ public class UrlInfoServiceImplTests {
 
         @Test
         void setsCorrectTimestamp() {
-            LocalDateTime beforeCall = LocalDateTime.now().minusSeconds(1);
+            LocalDateTime beforeCall = DateUtils.nowTruncatedToSeconds().minusSeconds(1);
             when(shortCodeService.generateId()).thenReturn(mockId);
             when(urlInfoRepository.saveAndFlush(any(UrlInfo.class))).thenAnswer(invocation -> invocation.getArgument(0));
             doNothing().when(urlInfoCacheService).evictUserUrlsCache(userId);
 
             urlService.create(mockRequest, mockUserInfo, userId);
-            LocalDateTime afterCall = LocalDateTime.now().plusSeconds(1);
+            LocalDateTime afterCall = DateUtils.nowTruncatedToSeconds().plusSeconds(1);
 
             verify(urlInfoRepository).saveAndFlush(argThat(urlInfo -> {
                 LocalDateTime createdTime = urlInfo.getCreatedDatetime();
@@ -347,7 +349,7 @@ public class UrlInfoServiceImplTests {
         void whenUrlNotBelongsToCurrentUser_ThrowsException() {
             CustomUserDetails userDetails = CustomUserDetails.create(Users.builder().id(2L).build());
             when(urlInfoRepository.findById(anyLong())).thenReturn(Optional.of(mockUrlInfo));
-            assertThrows(IllegalArgumentException.class, () -> urlService.updateOriginalUrl(anyLong(), userRequest, userDetails));
+            assertThrows(AccessDeniedException.class, () -> urlService.updateOriginalUrl(anyLong(), userRequest, userDetails));
         }
 
         @Test
@@ -363,6 +365,38 @@ public class UrlInfoServiceImplTests {
             verify(urlInfoRepository).save(argThat(urlInfo -> urlInfo.getOriginalUrl().equals("https://updated-example.com")));
             verify(urlInfoCacheService, times(1)).evictUserUrlsCache(userId);
             verify(urlInfoCacheService, times(1)).evictUrlAccessCache(mockUrlInfo.getShortCode());
+        }
+    }
+
+    @Nested
+    @DisplayName("Test delete function")
+    class DeleteUrlInfoTests {
+        @Test
+        void whenUrlInfoNotFound_ThrowsNotFoundException() {
+            CustomUserDetails userDetails = CustomUserDetails.create(Users.builder().id(2L).build());
+            when(urlInfoRepository.findById(anyLong())).thenReturn(Optional.empty());
+            assertThrows(NotFoundException.class, () -> urlService.delete(mockUrlInfo.getId(), userDetails));
+        }
+
+        @Test
+        void whenUrlNotBelongsToCurrentUser_ThrowsException() {
+            CustomUserDetails userDetails = CustomUserDetails.create(Users.builder().id(2L).build());
+            when(urlInfoRepository.findById(anyLong())).thenReturn(Optional.of(mockUrlInfo));
+            assertThrows(AccessDeniedException.class, () -> urlService.delete(mockUrlInfo.getId(), userDetails));
+        }
+
+        @Test
+        void whenFound_DeletesUrlInfo() {
+            CustomUserDetails userDetails = CustomUserDetails.create(Users.builder().id(userId).build());
+            when(urlInfoRepository.findById(anyLong())).thenReturn(Optional.of(mockUrlInfo));
+            doNothing().when(urlInfoCacheService).evictUserUrlsCache(userId);
+            doNothing().when(urlInfoCacheService).evictUrlAccessCache(mockUrlInfo.getShortCode());
+
+            urlService.delete(mockUrlInfo.getId(), userDetails);
+
+            verify(urlInfoRepository).deleteByIdAndUserId(mockUrlInfo.getId(), userId);
+            verify(urlInfoCacheService).evictUserUrlsCache(userId);
+            verify(urlInfoCacheService).evictUrlAccessCache(mockUrlInfo.getShortCode());
         }
     }
 }

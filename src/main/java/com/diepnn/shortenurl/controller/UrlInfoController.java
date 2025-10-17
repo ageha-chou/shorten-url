@@ -25,6 +25,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -121,5 +122,19 @@ public class UrlInfoController {
                                                              @AuthenticationPrincipal CustomUserDetails userDetails) {
         UrlInfoDTO dto = urlInfoService.updateOriginalUrl(id, userRequest, userDetails);
         return ResponseWrapperBuilder.withData(HttpStatus.OK, "Updated successfully", dto);
+    }
+
+    @Operation(summary = "Delete the given short URL")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Deleted successfully"),
+            @ApiResponse(responseCode = "404", description = "Url not found",
+                         content = @Content(schema = @Schema(implementation = ErrorResponseWrapper.class))
+            )
+    })
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public BaseResponseWrapper<Void> delete(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails userDetails) {
+        urlInfoService.delete(id, userDetails);
+        return ResponseWrapperBuilder.withNoData(HttpStatus.NO_CONTENT, "Deleted successfully");
     }
 }
