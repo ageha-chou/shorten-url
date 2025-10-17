@@ -53,4 +53,12 @@ public interface UrlInfoService {
      * @return the updated url info
      */
     UrlInfoDTO updateOriginalUrl(Long urlId, UpdateOriginalUrl userRequest, CustomUserDetails userDetails);
+
+    /**
+     * Delete url info by id.
+     *
+     * @param urlId url info id
+     * @param userDetails user information
+     */
+    void delete(Long urlId, CustomUserDetails userDetails);
 }

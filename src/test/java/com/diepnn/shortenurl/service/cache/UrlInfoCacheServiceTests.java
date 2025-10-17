@@ -2,7 +2,8 @@ package com.diepnn.shortenurl.service.cache;
 
 import com.diepnn.shortenurl.dto.UrlInfoDTO;
 import com.diepnn.shortenurl.dto.cache.UrlInfoCache;
-import com.diepnn.shortenurl.exception.NotFoundException;
+import com.diepnn.shortenurl.entity.UrlInfo;
+import com.diepnn.shortenurl.mapper.UrlInfoMapper;
 import com.diepnn.shortenurl.repository.UrlInfoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,13 +13,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,6 +25,9 @@ import static org.mockito.Mockito.when;
 public class UrlInfoCacheServiceTests {
     @Mock
     private UrlInfoRepository urlInfoRepository;
+
+    @Mock
+    private UrlInfoMapper urlInfoMapper;
 
     @InjectMocks
     private UrlInfoCacheService urlInfoCacheService;
@@ -39,7 +41,7 @@ public class UrlInfoCacheServiceTests {
 
     @Test
     void findByShortCodeCache_shouldReturnCache_whenFound() {
-        when(urlInfoRepository.findUrlInfoCacheByShortCode("abc123")).thenReturn(Optional.of(mockCache));
+        when(urlInfoRepository.findUrlInfoCacheByShortCode("abc123")).thenReturn(mockCache);
 
         UrlInfoCache result = urlInfoCacheService.findByShortCodeCache("abc123");
 
@@ -49,13 +51,13 @@ public class UrlInfoCacheServiceTests {
     }
 
     @Test
-    void findByShortCodeCache_shouldThrowNotFound_whenNotExists() {
+    void findByShortCodeCache_shouldReturnNull_whenNotExists() {
         // Arrange
-        when(urlInfoRepository.findUrlInfoCacheByShortCode("notfound")).thenReturn(Optional.empty());
+        when(urlInfoRepository.findUrlInfoCacheByShortCode("notfound")).thenReturn(null);
 
         // Act & Assert
-        NotFoundException ex = assertThrows(NotFoundException.class, () -> urlInfoCacheService.findByShortCodeCache("notfound"));
-        assertTrue(ex.getMessage().contains("Not found URL: notfound"));
+        UrlInfoCache urlInfoCache = urlInfoCacheService.findByShortCodeCache("notfound");
+        assertNull(urlInfoCache);
         verify(urlInfoRepository).findUrlInfoCacheByShortCode("notfound");
     }
 
@@ -63,19 +65,28 @@ public class UrlInfoCacheServiceTests {
     void findAllByUserId_shouldReturnList_whenRepositoryReturnsData() {
         // Arrange
         Long userId = 100L;
-        UrlInfoDTO dto = new UrlInfoDTO();
-        dto.setShortUrl("abc123");
-        dto.setOriginalUrl("https://example.com");
+        UrlInfo urlInfo = UrlInfo.builder()
+                                 .id(1L)
+                                 .userId(userId)
+                                 .shortCode("abc123")
+                                 .originalUrl("https://example.com")
+                                 .build();
 
-        when(urlInfoRepository.findAllUrlInfoDtosByUserIdOrderByCreatedDatetimeDesc(userId)).thenReturn(List.of(dto));
+        UrlInfoDTO dto = UrlInfoDTO.builder()
+                                   .id(1L)
+                                   .shortUrl("http://abc123")
+                                   .build();
+
+        when(urlInfoRepository.findAllByUserIdOrderByCreatedDatetimeDesc(userId)).thenReturn(List.of(urlInfo));
+        when(urlInfoMapper.toDtos(List.of(urlInfo))).thenReturn(List.of(dto));
 
         // Act
         List<UrlInfoDTO> result = urlInfoCacheService.findAllByUserId(userId);
 
         // Assert
         assertEquals(1, result.size());
-        assertEquals("abc123", result.getFirst().getShortUrl());
-        verify(urlInfoRepository).findAllUrlInfoDtosByUserIdOrderByCreatedDatetimeDesc(userId);
+        assertEquals("http://abc123", result.getFirst().getShortUrl());
+        verify(urlInfoRepository).findAllByUserIdOrderByCreatedDatetimeDesc(userId);
     }
 
     @Test

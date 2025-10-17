@@ -3,6 +3,7 @@ package com.diepnn.shortenurl.service;
 import com.diepnn.shortenurl.dto.UserInfo;
 import com.diepnn.shortenurl.dto.cache.UrlInfoCache;
 import com.diepnn.shortenurl.entity.UrlInfo;
+import com.diepnn.shortenurl.utils.DateUtils;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,7 +41,7 @@ public class ResolveUrlServiceImplTests {
 
     @BeforeEach
     public void setup() {
-        userInfo = new UserInfo(userIp, userAgent, LocalDateTime.now(), null);
+        userInfo = new UserInfo(userIp, userAgent, DateUtils.nowTruncatedToSeconds(), null);
     }
 
     @Test

@@ -19,7 +19,7 @@ public abstract class UsersMapper implements BaseMapper<Users, UserDTO> {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "status", constant = "ACTIVE")
-    @Mapping(target = "createdDatetime", expression = "java(java.time.LocalDateTime.now())")
+    @Mapping(target = "createdDatetime", expression = "java(com.diepnn.shortenurl.utils.DateUtils.nowTruncatedToSeconds())")
     @Mapping(target = "authProviders", constant = "LOCAL")
     @Mapping(target = "username", expression = "java(org.apache.commons.lang3.StringUtils.lowerCase(userRequest.getUsername()))")
     @Mapping(target = "email", expression = "java(org.apache.commons.lang3.StringUtils.lowerCase(userRequest.getEmail()))")
@@ -29,6 +29,6 @@ public abstract class UsersMapper implements BaseMapper<Users, UserDTO> {
     public abstract Users toEntity(UsernamePasswordSignupRequest userRequest);
 
     @BeanMapping(unmappedTargetPolicy = ReportingPolicy.IGNORE)
-    @Mapping(target = "updatedDatetime", expression = "java(java.time.LocalDateTime.now())")
+    @Mapping(target = "updatedDatetime", expression = "java(com.diepnn.shortenurl.utils.DateUtils.nowTruncatedToSeconds())")
     public abstract void updateEntity(@MappingTarget Users user, UserUpdateRequest userRequest);
 }

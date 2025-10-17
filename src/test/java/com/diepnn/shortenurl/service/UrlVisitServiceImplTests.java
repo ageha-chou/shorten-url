@@ -5,14 +5,13 @@ import com.diepnn.shortenurl.entity.UrlInfo;
 import com.diepnn.shortenurl.entity.UrlVisit;
 import com.diepnn.shortenurl.mapper.UrlVisitMapper;
 import com.diepnn.shortenurl.repository.UrlVisitRepository;
+import com.diepnn.shortenurl.utils.DateUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -34,7 +33,7 @@ public class UrlVisitServiceImplTests {
     @Test
     public void create_whenUrlInfoAndUserInfoAreValid_returnUrlVisit() {
         UrlInfo urlInfo = new UrlInfo();
-        UserInfo userInfo = new UserInfo("127.0.0.1", "Mozilla/5.0", LocalDateTime.now(), null);
+        UserInfo userInfo = new UserInfo("127.0.0.1", "Mozilla/5.0", DateUtils.nowTruncatedToSeconds(), null);
         UrlVisit urlVisit = new UrlVisit();
 
         when(urlVisitMapper.toEntity(userInfo)).thenReturn(urlVisit);

@@ -14,6 +14,7 @@ import com.diepnn.shortenurl.mapper.UrlInfoMapper;
 import com.diepnn.shortenurl.mapper.translator.ShortUrlMappings;
 import com.diepnn.shortenurl.security.CustomUserDetails;
 import com.diepnn.shortenurl.service.UrlInfoService;
+import com.diepnn.shortenurl.utils.DateUtils;
 import com.diepnn.shortenurl.utils.UserInfoRequestExtractor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,17 +29,17 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.LocalDateTime;
-
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -49,6 +50,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 public class UrlInfoControllerTests extends BaseControllerTest {
     private static final String CREATE_ENDPOINT = "/api/v1/url-infos/create";
     private static final String UPDATE_ORIGINAL_URL_ENDPOINT = "/api/v1/url-infos/{id}/update-original-url";
+    private static final String DELETE_ENDPOINT = "/api/v1/url-infos/{id}";
 
     @Autowired
     private MockMvc mockMvc;
@@ -146,6 +148,26 @@ public class UrlInfoControllerTests extends BaseControllerTest {
                    .andExpect(status().isTooManyRequests())
                    .andExpect(jsonPath("$.status", is(HttpStatus.TOO_MANY_REQUESTS.value())))
                    .andExpect(jsonPath("$.message", is("Id generation conflict")));
+        }
+    }
+
+    @Nested
+    @DisplayName("DELETE /api/v1/url-infos/{id}")
+    class DeleteUrlInfoTests {
+        @Test
+        void whenDeletedSuccessfully_returns204() throws Exception {
+            mockMvc.perform(delete(DELETE_ENDPOINT, 1L))
+                   .andExpect(status().isNoContent())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.NO_CONTENT.value())))
+                   .andExpect(jsonPath("$.message", is("Deleted successfully")));
+        }
+
+        @Test
+        void whenUrlNotFound_returns404() throws Exception {
+            doThrow(NotFoundException.class).when(urlInfoService).delete(anyLong(), any(CustomUserDetails.class));
+            mockMvc.perform(delete(DELETE_ENDPOINT, 1L))
+                   .andExpect(status().isNotFound())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.NOT_FOUND.value())));
         }
     }
 
@@ -307,7 +329,7 @@ public class UrlInfoControllerTests extends BaseControllerTest {
             mockUrlInfoDTO.setId(1L);
             mockUrlInfoDTO.setOriginalUrl("https://example.com/updated");
             mockUrlInfoDTO.setShortUrl("http://abc123");
-            mockUrlInfoDTO.setCreatedDatetime(LocalDateTime.now());
+            mockUrlInfoDTO.setCreatedDatetime(DateUtils.nowTruncatedToSeconds());
         }
 
         @Test

@@ -1,5 +1,6 @@
 package com.diepnn.shortenurl.controller;
 
+import com.diepnn.shortenurl.common.enums.UrlInfoStatus;
 import com.diepnn.shortenurl.dto.request.UpdateOriginalUrl;
 import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.entity.UrlInfo;
@@ -8,6 +9,7 @@ import com.diepnn.shortenurl.helper.BaseControllerIT;
 import com.diepnn.shortenurl.repository.UrlInfoRepository;
 import com.diepnn.shortenurl.repository.UsersRepository;
 import com.diepnn.shortenurl.security.JwtCacheService;
+import com.diepnn.shortenurl.utils.DateUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,13 +30,11 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
-import java.time.LocalDateTime;
-
 import static org.hamcrest.Matchers.is;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -46,6 +46,7 @@ public class UrlInfoControllerIT extends BaseControllerIT {
     private static final String CREATE_ENDPOINT = "/api/v1/url-infos/create";
     private static final String GET_BY_USER_ID_ENDPOINT = "/api/v1/url-infos";
     private static final String UPDATE_ORIGINAL_URL_ENDPOINT = "/api/v1/url-infos/{id}/update-original-url";
+    private static final String DELETE_ENDPOINT = "/api/v1/url-infos/{id}";
 
     @Container
     static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
@@ -103,8 +104,9 @@ public class UrlInfoControllerIT extends BaseControllerIT {
                              .userId(testUser.getId())
                              .originalUrl("https://example.com/original")
                              .shortCode("abc123")
-                             .createdDatetime(LocalDateTime.now())
-                             .updatedDatetime(LocalDateTime.now())
+                             .status(UrlInfoStatus.ACTIVE)
+                             .createdDatetime(DateUtils.nowTruncatedToSeconds())
+                             .updatedDatetime(DateUtils.nowTruncatedToSeconds())
                              .build();
 
         testUrlInfo = urlInfoRepository.saveAndFlush(testUrlInfo);
@@ -145,7 +147,6 @@ public class UrlInfoControllerIT extends BaseControllerIT {
             mockMvc.perform(post(CREATE_ENDPOINT)
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(request)))
-                   .andDo(print())
                    .andExpect(status().isCreated())
                    .andExpect(jsonPath("$.status", is(HttpStatus.CREATED.value())))
                    .andExpect(jsonPath("$.data.original_url").value("https://example.com/anonymous"));
@@ -161,7 +162,6 @@ public class UrlInfoControllerIT extends BaseControllerIT {
                                     .header("Authorization", "Bearer invalid-token")
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(request)))
-                   .andDo(print())
                    .andExpect(status().isUnauthorized())
                    .andExpect(jsonPath("$.status", is(HttpStatus.UNAUTHORIZED.value())));
         }
@@ -177,7 +177,6 @@ public class UrlInfoControllerIT extends BaseControllerIT {
                                     .header("Authorization", "Bearer " + expiredToken)
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(request)))
-                   .andDo(print())
                    .andExpect(status().isUnauthorized())
                    .andExpect(jsonPath("$.status", is(HttpStatus.UNAUTHORIZED.value())));
         }
@@ -189,7 +188,6 @@ public class UrlInfoControllerIT extends BaseControllerIT {
         void shouldSucceed_WithValidToken() throws Exception {
             mockMvc.perform(get(GET_BY_USER_ID_ENDPOINT)
                                     .header("Authorization", "Bearer " + validToken))
-                   .andDo(print())
                    .andExpect(status().isOk())
                    .andExpect(jsonPath("$.status", is(HttpStatus.OK.value())))
                    .andExpect(jsonPath("$.message").value("Found"))
@@ -199,7 +197,6 @@ public class UrlInfoControllerIT extends BaseControllerIT {
         @Test
         void shouldFail_WithoutToken() throws Exception {
             mockMvc.perform(get(GET_BY_USER_ID_ENDPOINT))
-                   .andDo(print())
                    .andExpect(status().isUnauthorized())
                    .andExpect(jsonPath("$.status", is(HttpStatus.UNAUTHORIZED.value())));
         }
@@ -208,7 +205,6 @@ public class UrlInfoControllerIT extends BaseControllerIT {
         void shouldFail_WithInvalidToken() throws Exception {
             mockMvc.perform(get(GET_BY_USER_ID_ENDPOINT)
                                     .header("Authorization", "Bearer invalid-token"))
-                   .andDo(print())
                    .andExpect(status().isUnauthorized())
                    .andExpect(jsonPath("$.status", is(HttpStatus.UNAUTHORIZED.value())));
         }
@@ -220,13 +216,13 @@ public class UrlInfoControllerIT extends BaseControllerIT {
             otherUserUrl.setUserId(otherUser.getId());
             otherUserUrl.setOriginalUrl("https://example.com/other");
             otherUserUrl.setShortCode("xyz789");
-            otherUserUrl.setCreatedDatetime(LocalDateTime.now());
-            otherUserUrl.setUpdatedDatetime(LocalDateTime.now());
+            otherUserUrl.setStatus(UrlInfoStatus.ACTIVE);
+            otherUserUrl.setCreatedDatetime(DateUtils.nowTruncatedToSeconds());
+            otherUserUrl.setUpdatedDatetime(DateUtils.nowTruncatedToSeconds());
             urlInfoRepository.saveAndFlush(otherUserUrl);
 
             mockMvc.perform(get(GET_BY_USER_ID_ENDPOINT)
                                     .header("Authorization", "Bearer " + generateToken(testUser)))
-                   .andDo(print())
                    .andExpect(status().isOk())
                    .andExpect(jsonPath("$.status", is(HttpStatus.OK.value())))
                    .andExpect(jsonPath("$.data[?(@.short_url == 'xyz789')]").doesNotExist());
@@ -244,7 +240,6 @@ public class UrlInfoControllerIT extends BaseControllerIT {
                                     .header("Authorization", "Bearer " + validToken)
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(request)))
-                   .andDo(print())
                    .andExpect(status().isOk())
                    .andExpect(jsonPath("$.status", is(HttpStatus.OK.value())))
                    .andExpect(jsonPath("$.message").value("Updated successfully"))
@@ -258,7 +253,6 @@ public class UrlInfoControllerIT extends BaseControllerIT {
             mockMvc.perform(patch(UPDATE_ORIGINAL_URL_ENDPOINT, testUrlInfo.getId())
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(request)))
-                   .andDo(print())
                    .andExpect(status().isUnauthorized())
                    .andExpect(jsonPath("$.status", is(HttpStatus.UNAUTHORIZED.value())));
         }
@@ -271,7 +265,6 @@ public class UrlInfoControllerIT extends BaseControllerIT {
                                     .header("Authorization", "Bearer invalid-token")
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(request)))
-                   .andDo(print())
                    .andExpect(status().isUnauthorized())
                    .andExpect(jsonPath("$.status", is(HttpStatus.UNAUTHORIZED.value())));
         }
@@ -284,9 +277,8 @@ public class UrlInfoControllerIT extends BaseControllerIT {
                                     .header("Authorization", "Bearer " + otherUserToken)
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(request)))
-                   .andDo(print())
-                   .andExpect(status().isBadRequest())
-                   .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())))
+                   .andExpect(status().isUnauthorized())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.UNAUTHORIZED.value())))
                    .andExpect(jsonPath("$.message").value("URL not belongs to current user"));
         }
 
@@ -301,7 +293,6 @@ public class UrlInfoControllerIT extends BaseControllerIT {
                                     .header("Authorization", "Bearer " + expiredToken)
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(request)))
-                   .andDo(print())
                    .andExpect(status().isUnauthorized())
                    .andExpect(jsonPath("$.status", is(HttpStatus.UNAUTHORIZED.value())));
         }
@@ -315,34 +306,8 @@ public class UrlInfoControllerIT extends BaseControllerIT {
                                     .header("Authorization", "Bearer " + validToken)
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(request)))
-                   .andDo(print())
                    .andExpect(status().isNotFound())
                    .andExpect(jsonPath("$.status", is(HttpStatus.NOT_FOUND.value())));
-        }
-
-        // ==================== CROSS-USER AUTHORIZATION TESTS ====================
-
-        @Test
-        void shouldPreventUserFromAccessingOtherUsersData() throws Exception {
-            UrlInfo testUserUrl = new UrlInfo();
-            testUserUrl.setId(100L);
-            testUserUrl.setUserId(testUser.getId());
-            testUserUrl.setOriginalUrl("https://example.com/private");
-            testUserUrl.setShortCode("private1");
-            testUserUrl.setCreatedDatetime(LocalDateTime.now());
-            testUserUrl.setUpdatedDatetime(LocalDateTime.now());
-            testUserUrl = urlInfoRepository.saveAndFlush(testUserUrl);
-
-            UpdateOriginalUrl request = new UpdateOriginalUrl("https://example.com/unauthorized");
-
-            mockMvc.perform(patch(UPDATE_ORIGINAL_URL_ENDPOINT, testUserUrl.getId())
-                                    .header("Authorization", "Bearer " + generateToken(otherUser))
-                                    .contentType(MediaType.APPLICATION_JSON)
-                                    .content(objectMapper.writeValueAsString(request)))
-                   .andDo(print())
-                   .andExpect(status().isBadRequest())
-                   .andExpect(jsonPath("$.status", is(HttpStatus.BAD_REQUEST.value())))
-                   .andExpect(jsonPath("$.message").value("URL not belongs to current user"));
         }
 
         @Test
@@ -353,10 +318,49 @@ public class UrlInfoControllerIT extends BaseControllerIT {
                                     .header("Authorization", "Bearer " + validToken)
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(request)))
-                   .andDo(print())
                    .andExpect(status().isOk())
                    .andExpect(jsonPath("$.status", is(HttpStatus.OK.value())))
                    .andExpect(jsonPath("$.data.original_url").value("https://example.com/my-update"));
+        }
+    }
+
+    @Nested
+    class DeleteTests {
+        @Test
+        void shouldSucceed_WithValidTokenAndOwnership() throws Exception {
+            mockMvc.perform(delete(DELETE_ENDPOINT, testUrlInfo.getId())
+                                    .header("Authorization", "Bearer " + validToken))
+                   .andExpect(status().isNoContent())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.NO_CONTENT.value())))
+                   .andExpect(jsonPath("$.message").value("Deleted successfully"));
+        }
+
+        @Test
+        void shouldFail_WhenUrlDoesNotExist() throws Exception {
+            Long nonExistentId = 99999L;
+
+            mockMvc.perform(delete(DELETE_ENDPOINT, nonExistentId)
+                                    .header("Authorization", "Bearer " + validToken))
+                   .andExpect(status().isNotFound())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.NOT_FOUND.value())));
+        }
+
+        @Test
+        void shouldPreventUserFromAccessingOtherUsersData() throws Exception {
+            mockMvc.perform(delete(DELETE_ENDPOINT, testUrlInfo.getId())
+                                    .header("Authorization", "Bearer " + generateToken(otherUser)))
+                   .andExpect(status().isUnauthorized())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.UNAUTHORIZED.value())))
+                   .andExpect(jsonPath("$.message").value("URL not belongs to current user"));
+        }
+
+        @Test
+        void shouldFail_WithoutToken() throws Exception {
+            UpdateOriginalUrl request = new UpdateOriginalUrl("https://example.com/updated");
+
+            mockMvc.perform(delete(DELETE_ENDPOINT, testUrlInfo.getId()))
+                   .andExpect(status().isUnauthorized())
+                   .andExpect(jsonPath("$.status", is(HttpStatus.UNAUTHORIZED.value())));
         }
     }
 }

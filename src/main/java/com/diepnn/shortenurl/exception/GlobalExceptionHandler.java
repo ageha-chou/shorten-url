@@ -7,6 +7,7 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -73,6 +74,12 @@ public class GlobalExceptionHandler {
         return ResponseWrapperBuilder.withNoData(HttpStatus.BAD_REQUEST, "Invalid request");
     }
 
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public BaseResponseWrapper<Void> handleAccessDeniedException(AccessDeniedException ex) {
+        return ResponseWrapperBuilder.withNoData(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
     @ExceptionHandler(NoHandlerFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public BaseResponseWrapper<Void> handleNoHandlerFoundException(NoHandlerFoundException ex) {
@@ -87,7 +94,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DuplicateUniqueKeyException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
-    public BaseResponseWrapper<Void> handleDuplicateConstraintException(RuntimeException ex) {
+    public BaseResponseWrapper<Void> handleDuplicateConstraintException(DuplicateUniqueKeyException ex) {
         return ResponseWrapperBuilder.withNoData(HttpStatus.CONFLICT, ex.getMessage());
     }
 

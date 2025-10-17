@@ -22,4 +22,6 @@ public abstract class UrlInfoMapper implements BaseMapper<UrlInfo, UrlInfoDTO>{
     @Mapping(target = "shortUrl", source = "shortCode", qualifiedBy = {ShortUrlTranslator.class, ToShortUrl.class})
     @Override
     public abstract UrlInfoDTO toDto(UrlInfo s);
+
+    public abstract List<UrlInfoDTO> toDtos(List<UrlInfo> urlInfos);
 }

@@ -14,12 +14,14 @@ import com.diepnn.shortenurl.mapper.UrlInfoMapper;
 import com.diepnn.shortenurl.repository.UrlInfoRepository;
 import com.diepnn.shortenurl.security.CustomUserDetails;
 import com.diepnn.shortenurl.service.cache.UrlInfoCacheService;
+import com.diepnn.shortenurl.utils.DateUtils;
 import com.diepnn.shortenurl.utils.SqlConstraintUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -59,7 +61,7 @@ public class UrlInfoServiceImpl implements UrlInfoService {
                                  .userId(userId)
                                  .createdByIp(userInfo.ipAddress())
                                  .createdByUserAgent(userInfo.userAgent())
-                                 .createdDatetime(LocalDateTime.now())
+                                 .createdDatetime(DateUtils.nowTruncatedToSeconds())
                                  .build();
 
         try {
@@ -84,13 +86,19 @@ public class UrlInfoServiceImpl implements UrlInfoService {
         }
     }
 
+    @Transactional(readOnly = true)
     @Override
     public UrlInfoCache findByShortCodeCache(String shortCode) {
         if (StringUtils.isBlank(shortCode)) {
             throw new IllegalArgumentException("Short code cannot be null or empty");
         }
 
-        return urlInfoCacheService.findByShortCodeCache(shortCode);
+        UrlInfoCache urlInfoCache = urlInfoCacheService.findByShortCodeCache(shortCode);
+        if (urlInfoCache == null) {
+            throw new NotFoundException("Not found URL for short code: " + shortCode);
+        }
+
+        return urlInfoCache;
     }
 
     /**
@@ -104,6 +112,7 @@ public class UrlInfoServiceImpl implements UrlInfoService {
         urlInfoRepository.updateLastAccessDatetimeById(urlId, lastAccessDatetime);
     }
 
+    @Transactional(readOnly = true)
     @Override
     public List<UrlInfoDTO> findAllByUserId(Long userId) {
         if (userId == null) {
@@ -121,20 +130,40 @@ public class UrlInfoServiceImpl implements UrlInfoService {
     @Transactional
     @Override
     public UrlInfoDTO updateOriginalUrl(Long urlId, UpdateOriginalUrl userRequest, CustomUserDetails userDetails) {
-        UrlInfo urlInfo = urlInfoRepository.findById(urlId)
-                                           .orElseThrow(() -> new NotFoundException("URL not found"));
+        UrlInfo urlInfo = findById(urlId);
 
         Long ownerId = urlInfo.getUserId();
         Long currentUserId = userDetails.getId();
         if (ownerId == null || !ownerId.equals(currentUserId)) {
-            throw new IllegalArgumentException("URL not belongs to current user");
+            throw new AccessDeniedException("URL not belongs to current user");
         }
 
         urlInfo.setOriginalUrl(userRequest.getOriginalUrl());
-        urlInfo.setUpdatedDatetime(LocalDateTime.now());
+        urlInfo.setUpdatedDatetime(DateUtils.nowTruncatedToSeconds());
         urlInfoRepository.save(urlInfo);
         urlInfoCacheService.evictUserUrlsCache(currentUserId);
         urlInfoCacheService.evictUrlAccessCache(urlInfo.getShortCode());
         return urlInfoMapper.toDto(urlInfo);
+    }
+
+    @Transactional
+    @Override
+    public void delete(Long urlId, CustomUserDetails userDetails) {
+        UrlInfo urlInfo = findById(urlId);
+
+        Long ownerId = urlInfo.getUserId();
+        Long currentUserId = userDetails.getId();
+        if (ownerId == null || !ownerId.equals(currentUserId)) {
+            throw new AccessDeniedException("URL not belongs to current user");
+        }
+
+        urlInfoRepository.deleteByIdAndUserId(urlId, userDetails.getId());
+        urlInfoCacheService.evictUserUrlsCache(userDetails.getId());
+        urlInfoCacheService.evictUrlAccessCache(urlInfo.getShortCode());
+    }
+
+    private UrlInfo findById(Long urlId) {
+        return urlInfoRepository.findById(urlId)
+                                .orElseThrow(() -> new NotFoundException("URL not found"));
     }
 }
