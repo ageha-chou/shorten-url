@@ -168,10 +168,8 @@ public class UrlInfoControllerIT extends BaseControllerIT {
 
         @Test
         void shouldFail_WithExpiredToken() throws Exception {
-            String expiredToken = generateToken(testUser);
+            String expiredToken = generateExpiredToken(testUser);
             UrlInfoRequest request = new UrlInfoRequest("https://example.com/test", null);
-
-            Thread.sleep(1000);
 
             mockMvc.perform(post(CREATE_ENDPOINT)
                                     .header("Authorization", "Bearer " + expiredToken)
@@ -222,7 +220,7 @@ public class UrlInfoControllerIT extends BaseControllerIT {
             urlInfoRepository.saveAndFlush(otherUserUrl);
 
             mockMvc.perform(get(GET_BY_USER_ID_ENDPOINT)
-                                    .header("Authorization", "Bearer " + generateToken(testUser)))
+                                    .header("Authorization", "Bearer " + validToken))
                    .andExpect(status().isOk())
                    .andExpect(jsonPath("$.status", is(HttpStatus.OK.value())))
                    .andExpect(jsonPath("$.data[?(@.short_url == 'xyz789')]").doesNotExist());
@@ -284,10 +282,8 @@ public class UrlInfoControllerIT extends BaseControllerIT {
 
         @Test
         void shouldFail_WithExpiredToken() throws Exception {
-            String expiredToken = generateToken(testUser);
+            String expiredToken = generateExpiredToken(testUser);
             UpdateOriginalUrl request = new UpdateOriginalUrl("https://example.com/updated");
-
-            Thread.sleep(1000);
 
             mockMvc.perform(patch(UPDATE_ORIGINAL_URL_ENDPOINT, testUrlInfo.getId())
                                     .header("Authorization", "Bearer " + expiredToken)

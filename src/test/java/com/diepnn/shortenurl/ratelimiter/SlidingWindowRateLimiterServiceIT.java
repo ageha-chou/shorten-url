@@ -44,7 +44,6 @@ public class SlidingWindowRateLimiterServiceIT {
         // Test properties - use longer windows to avoid timing issues
         registry.add("app.rate-limiter.limit", () -> 10);
         registry.add("app.rate-limiter.window-size-ms", () -> 1000);
-        registry.add("app.rate-limiter.sub-window-size-ms", () -> 100);
     }
 
     @Autowired
@@ -87,7 +86,7 @@ public class SlidingWindowRateLimiterServiceIT {
         }
 
         // Then - verify Redis keys were created
-        Set<String> keys = redisTemplate.keys("rate-limiter::" + testClientKey + "::*");
+        Set<String> keys = redisTemplate.keys("rate-limiter::" + testClientKey);
         assertNotNull(keys);
         assertFalse(keys.isEmpty());
     }
@@ -141,8 +140,8 @@ public class SlidingWindowRateLimiterServiceIT {
         assertTrue(rateLimiterService.isAllowed(client2), "Client 2 should not be affected by client 1's rate limit");
 
         // Verify separate Redis keys
-        Set<String> client1Keys = redisTemplate.keys("rate-limiter::" + client1 + "::*");
-        Set<String> client2Keys = redisTemplate.keys("rate-limiter::" + client2 + "::*");
+        Set<String> client1Keys = redisTemplate.keys("rate-limiter::" + client1);
+        Set<String> client2Keys = redisTemplate.keys("rate-limiter::" + client2);
         assertNotNull(client1Keys);
         assertNotNull(client2Keys);
         assertFalse(client1Keys.isEmpty());
@@ -210,14 +209,14 @@ public class SlidingWindowRateLimiterServiceIT {
         rateLimiterService.isAllowed(testClientKey);
 
         // Then
-        Set<String> keys = redisTemplate.keys("rate-limiter::" + testClientKey + "::*");
+        Set<String> keys = redisTemplate.keys("rate-limiter::" + testClientKey);
         assertNotNull(keys);
         assertFalse(keys.isEmpty());
 
         // Verify key format
         keys.forEach(key -> {
-            assertTrue(key.matches("rate-limiter::" + testClientKey + "::\\d+"),
-                       "Key should match pattern 'rate-limiter::<client>::<timestamp>' but was: " + key);
+            assertTrue(key.matches("rate-limiter::" + testClientKey),
+                       "Key should match pattern 'rate-limiter::<client>' but was: " + key);
         });
     }
 
@@ -227,7 +226,7 @@ public class SlidingWindowRateLimiterServiceIT {
         rateLimiterService.isAllowed(testClientKey);
 
         // Then
-        Set<String> keys = redisTemplate.keys("rate-limiter::" + testClientKey + "::*");
+        Set<String> keys = redisTemplate.keys("rate-limiter::" + testClientKey);
         assertNotNull(keys);
         assertFalse(keys.isEmpty());
 
@@ -238,10 +237,8 @@ public class SlidingWindowRateLimiterServiceIT {
             assertTrue(ttl > 0, "TTL should be positive for key: " + key);
 
             // TTL should be window + buffer
-            long windowSize = props.getWindowSizeMs();
-            long subWindowSize = props.getSubWindowSizeMs();
-            long minExpectedTtl = windowSize;
-            long maxExpectedTtl = windowSize + (2 * subWindowSize);
+            long minExpectedTtl = props.getWindowSizeMs();
+            long maxExpectedTtl = 10000L;
 
             assertTrue(ttl >= minExpectedTtl && ttl <= maxExpectedTtl,
                        "TTL (" + ttl + "ms) should be between " + minExpectedTtl + "ms and " + maxExpectedTtl + "ms");
@@ -280,7 +277,7 @@ public class SlidingWindowRateLimiterServiceIT {
         assertTrue(result);
 
         // Verify key was created correctly
-        Set<String> keys = redisTemplate.keys("rate-limiter::" + clientKey + "::*");
+        Set<String> keys = redisTemplate.keys("rate-limiter::" + clientKey);
         assertNotNull(keys);
         assertFalse(keys.isEmpty());
 
@@ -300,24 +297,16 @@ public class SlidingWindowRateLimiterServiceIT {
 
     @Test
     void isAllowed_shouldIncrementCountersCorrectly() {
-        // When - make 5 requests
-        for (int i = 0; i < 5; i++) {
+        int requestCount = 5;
+        for (int i = 0; i < requestCount; i++) {
             rateLimiterService.isAllowed(testClientKey);
         }
 
-        // Then - verify counters in Redis
-        Set<String> keys = redisTemplate.keys("rate-limiter::" + testClientKey + "::*");
+        String keys = "rate-limiter::" + testClientKey;
         assertNotNull(keys);
 
-        long totalCount = 0;
-        for (String key : keys) {
-            Object count = redisTemplate.opsForValue().get(key);
-            if (count != null) {
-                totalCount += Long.parseLong(count.toString());
-            }
-        }
-
-        assertEquals(5L, totalCount, "Total count across all sub-windows should be 5");
+        Long totalCount = redisTemplate.opsForZSet().count(keys, 0, System.currentTimeMillis());
+        assertEquals(requestCount, totalCount, "Total allowed requests should be + " + requestCount + ", but was: " + totalCount);
     }
 
     @Test
@@ -335,28 +324,6 @@ public class SlidingWindowRateLimiterServiceIT {
 
         // Then
         assertEquals(limit, allowedCount, "Should allow exactly " + limit + " requests even when made rapidly");
-    }
-
-    @Test
-    void isAllowed_shouldDistributeRequestsAcrossMultipleSubWindows() throws InterruptedException {
-        // Given
-        long subWindowSize = props.getSubWindowSizeMs();
-
-        // When - make requests across different sub-windows
-        rateLimiterService.isAllowed(testClientKey);
-
-        // Wait for next sub-window
-        Thread.sleep(subWindowSize);
-
-        rateLimiterService.isAllowed(testClientKey);
-
-        // Then - should have keys in different sub-windows
-        Set<String> keys = redisTemplate.keys("rate-limiter::" + testClientKey + "::*");
-        assertNotNull(keys);
-
-        // Should have at least 2 different sub-window keys
-        assertTrue(keys.size() >= 2,
-                   "Should have keys in at least 2 different sub-windows, but got: " + keys.size());
     }
 
     @Test
@@ -381,7 +348,7 @@ public class SlidingWindowRateLimiterServiceIT {
         assertTrue(result);
 
         // Verify key was stored
-        Set<String> keys = redisTemplate.keys("rate-limiter::" + longKey + "::*");
+        Set<String> keys = redisTemplate.keys("rate-limiter::" + longKey);
         assertNotNull(keys);
         assertFalse(keys.isEmpty());
 
@@ -391,7 +358,7 @@ public class SlidingWindowRateLimiterServiceIT {
 
     private long calculateExpectedTtl() {
         long proportionalBuffer = (long) (props.getWindowSizeMs() * 0.1);
-        long buffer = Math.max(props.getSubWindowSizeMs(), Math.min(proportionalBuffer, 2 * props.getSubWindowSizeMs()));
+        long buffer = Math.max(1000L, Math.min(proportionalBuffer, 10000L));
         return props.getWindowSizeMs() + buffer;
     }
 }

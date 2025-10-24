@@ -12,19 +12,20 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scripting.support.ResourceScriptSource;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collections;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class SlidingWindowRateLimiterService implements RateLimiterService {
-    private static final String KEY_FORMAT = "rate-limiter::%s::%d";
+    private static final String KEY_FORMAT = "rate-limiter::%s";
 
     private final RateLimiterProperties props;
     private final RedisTemplate<String, Object> redisTemplate;
     private final ResourceLoader resourceLoader;
     private DefaultRedisScript<Long> rateLimiterScript;
+    private long ttl;
 
     @PostConstruct
     public void init() {
@@ -33,6 +34,8 @@ public class SlidingWindowRateLimiterService implements RateLimiterService {
             rateLimiterScript = new DefaultRedisScript<>();
             rateLimiterScript.setScriptSource(new ResourceScriptSource(scriptResource));
             rateLimiterScript.setResultType(Long.class);
+
+            ttl = calculateTtl();
 
             log.info("Loaded Redis rate limiter script: {}", scriptResource.getFilename());
         } catch (Exception e) {
@@ -48,32 +51,34 @@ public class SlidingWindowRateLimiterService implements RateLimiterService {
         }
 
         try {
+            String redisKey = String.format(KEY_FORMAT, key);
             long currentTime = System.currentTimeMillis();
-            long currentSubWindow = currentTime / props.getSubWindowSizeMs();
-            long oldSubWindow = (currentTime - props.getWindowSizeMs()) / props.getSubWindowSizeMs();
 
-            List<String> subWindowKeys = new ArrayList<>();
-            for (long currWindow = oldSubWindow; currWindow <= currentSubWindow; ++currWindow) {
-                subWindowKeys.add(String.format(KEY_FORMAT, key, currWindow));
-            }
+            // Generate unique request ID to prevent duplicate entries in sorted set
+            String requestId = currentTime + ":" + UUID.randomUUID();
 
-            long ttl = calculateTtl();
             Long result = redisTemplate.execute(rateLimiterScript,
-                                                subWindowKeys,
+                                                Collections.singletonList(redisKey),
+                                                currentTime,
+                                                props.getWindowSizeMs(),
                                                 props.getLimit(),
-                                                ttl
+                                                ttl,
+                                                requestId
                                                );
 
             return result == 1L;
         } catch (Exception e) {
             log.error("Failed to check rate limiter for client: {}", key, e);
+            // Fail closed: deny requests on errors
             return false;
         }
     }
 
     private long calculateTtl() {
+        // Add 10% buffer to window size to handle clock skew and cleanup delays
         long proportionalBuffer = (long) (props.getWindowSizeMs() * 0.1);
-        long buffer = Math.max(props.getSubWindowSizeMs(), Math.min(proportionalBuffer, 2 * props.getSubWindowSizeMs()));
+        // Ensure buffer is at least 1 second but no more than 10 seconds
+        long buffer = Math.max(1000L, Math.min(proportionalBuffer, 10000L));
         return props.getWindowSizeMs() + buffer;
     }
 }

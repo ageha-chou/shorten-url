@@ -181,6 +181,7 @@
                     </includes>
                     <excludes>
                         <exclude>**/*IT.java</exclude>
+                        <exclude>**/*StressTest.java</exclude>
                     </excludes>
                 </configuration>
             </plugin>
@@ -198,7 +199,11 @@
                         <configuration>
                             <includes>
                                 <include>**/*IT.java</include>
+                                <include>**/*StressTest.java</include>
                             </includes>
+<!--                            <parallel>methods</parallel>-->
+<!--                            <threadCount>4</threadCount>-->
+<!--                            <perCoreThreadCount>true</perCoreThreadCount>-->
                         </configuration>
                     </execution>
                 </executions>
