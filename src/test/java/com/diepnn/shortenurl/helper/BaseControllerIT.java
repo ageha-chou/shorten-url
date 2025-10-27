@@ -4,24 +4,32 @@ import com.diepnn.shortenurl.common.properties.JwtProperties;
 import com.diepnn.shortenurl.entity.Users;
 import com.diepnn.shortenurl.security.CustomUserDetails;
 import com.diepnn.shortenurl.security.JwtService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
-@ActiveProfiles("test")
-public abstract class BaseControllerIT {
+@AutoConfigureMockMvc
+public abstract class BaseControllerIT extends BaseIntegrationTest {
     @Autowired
     protected JwtService jwtService;
 
     @Autowired
     protected JwtProperties jwtProperties;
+
+    @Autowired
+    protected MockMvc mockMvc;
+
+    @Autowired
+    protected ObjectMapper objectMapper;
 
     protected String generateToken(Users user) {
         CustomUserDetails userDetails = CustomUserDetails.create(user);

@@ -10,29 +10,24 @@ import com.diepnn.shortenurl.entity.UrlInfo;
 import com.diepnn.shortenurl.entity.Users;
 import com.diepnn.shortenurl.exception.AliasAlreadyExistsException;
 import com.diepnn.shortenurl.exception.NotFoundException;
+import com.diepnn.shortenurl.helper.BaseIntegrationTest;
 import com.diepnn.shortenurl.repository.UrlInfoRepository;
 import com.diepnn.shortenurl.repository.UsersRepository;
 import com.diepnn.shortenurl.security.CustomUserDetails;
 import com.diepnn.shortenurl.service.cache.UrlInfoCacheService;
 import com.diepnn.shortenurl.utils.DateUtils;
-import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.CacheManager;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -43,17 +38,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@TestInstance(TestInstance.Lifecycle.PER_METHOD)
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@ActiveProfiles("test")
-@Transactional
-public class UrlInfoServiceImplIT {
+@SpringBootTest
+public class UrlInfoServiceImplIT extends BaseIntegrationTest {
     @Autowired
     private CacheManager cacheManager;
-
-    @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
 
     private UrlInfoCache mockUrlInfoCache;
     private String validShortCode;
@@ -65,13 +53,6 @@ public class UrlInfoServiceImplIT {
                 1L,
                 "https://test.com"
         );
-
-        // Clear cache before each test
-        cacheManager.getCache("url-access").clear();
-        Set<String> keys = redisTemplate.keys("authenticated-user::*");
-        if (!keys.isEmpty()) {
-            redisTemplate.delete(keys);
-        }
     }
 
     private UserInfo mockUserInfo(String ipAddress, String userAgent) {

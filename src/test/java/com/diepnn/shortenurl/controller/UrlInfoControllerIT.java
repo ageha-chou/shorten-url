@@ -8,27 +8,15 @@ import com.diepnn.shortenurl.entity.Users;
 import com.diepnn.shortenurl.helper.BaseControllerIT;
 import com.diepnn.shortenurl.repository.UrlInfoRepository;
 import com.diepnn.shortenurl.repository.UsersRepository;
-import com.diepnn.shortenurl.security.JwtCacheService;
 import com.diepnn.shortenurl.utils.DateUtils;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -39,39 +27,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
-@AutoConfigureMockMvc
-@Transactional
-@Testcontainers
 public class UrlInfoControllerIT extends BaseControllerIT {
     private static final String CREATE_ENDPOINT = "/api/v1/url-infos/create";
     private static final String GET_BY_USER_ID_ENDPOINT = "/api/v1/url-infos";
     private static final String UPDATE_ORIGINAL_URL_ENDPOINT = "/api/v1/url-infos/{id}/update-original-url";
     private static final String DELETE_ENDPOINT = "/api/v1/url-infos/{id}";
 
-    @Container
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
-            .withExposedPorts(6379);
-
-    @DynamicPropertySource
-    static void redisProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.data.redis.host", redis::getHost);
-        registry.add("spring.data.redis.port", redis::getFirstMappedPort);
-    }
-
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
     @Autowired
     private UsersRepository userRepository;
 
     @Autowired
     private UrlInfoRepository urlInfoRepository;
-
-    @Autowired
-    private JwtCacheService jwtCacheService;
 
     private Users testUser;
     private Users otherUser;
@@ -114,12 +80,6 @@ public class UrlInfoControllerIT extends BaseControllerIT {
         // Generate JWT tokens
         validToken = generateToken(testUser);
         otherUserToken = generateToken(otherUser);
-    }
-
-    @AfterEach
-    void tearDown() {
-        jwtCacheService.remove("testuser");
-        jwtCacheService.remove("otheruser");
     }
 
     @Nested
