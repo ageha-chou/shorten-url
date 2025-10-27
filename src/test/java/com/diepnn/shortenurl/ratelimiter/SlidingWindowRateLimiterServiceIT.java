@@ -1,18 +1,13 @@
 package com.diepnn.shortenurl.ratelimiter;
 
 import com.diepnn.shortenurl.common.properties.RateLimiterProperties;
-import org.junit.jupiter.api.AfterEach;
+import com.diepnn.shortenurl.helper.BaseIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
+import org.springframework.test.context.TestPropertySource;
 
 import java.util.Set;
 import java.util.UUID;
@@ -29,23 +24,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
-@Testcontainers
-public class SlidingWindowRateLimiterServiceIT {
-
-    @Container
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
-            .withExposedPorts(6379);
-
-    @DynamicPropertySource
-    static void redisProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.data.redis.host", redis::getHost);
-        registry.add("spring.data.redis.port", redis::getFirstMappedPort);
-
-        // Test properties - use longer windows to avoid timing issues
-        registry.add("app.rate-limiter.limit", () -> 10);
-        registry.add("app.rate-limiter.window-size-ms", () -> 1000);
-    }
-
+@TestPropertySource(properties = {
+        "app.rate-limiter.limit=10",
+        "app.rate-limiter.window-size-ms=1000"
+})
+public class SlidingWindowRateLimiterServiceIT extends BaseIntegrationTest {
     @Autowired
     private RateLimiterService rateLimiterService;
 
@@ -61,17 +44,6 @@ public class SlidingWindowRateLimiterServiceIT {
     void setUp() {
         // Generate unique client key for each test to avoid interference
         testClientKey = "test-" + UUID.randomUUID();
-    }
-
-    @AfterEach
-    void tearDown() {
-        // Clean up test keys
-        if (testClientKey != null) {
-            Set<String> keys = redisTemplate.keys("rate-limiter::" + testClientKey + "::*");
-            if (!keys.isEmpty()) {
-                redisTemplate.delete(keys);
-            }
-        }
     }
 
     @Test

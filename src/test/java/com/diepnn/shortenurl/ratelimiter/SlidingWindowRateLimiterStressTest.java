@@ -1,17 +1,13 @@
 package com.diepnn.shortenurl.ratelimiter;
 
 import com.diepnn.shortenurl.common.properties.RateLimiterProperties;
+import com.diepnn.shortenurl.helper.BaseIntegrationTest;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
+import org.springframework.test.context.TestPropertySource;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -24,9 +20,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
-@Testcontainers
+@TestPropertySource(properties = {
+        "app.rate-limiter.limit=10",
+        "app.rate-limiter.window-size-ms=1000"
+})
 @Tag("stress")
-public class SlidingWindowRateLimiterStressTest {
+public class SlidingWindowRateLimiterStressTest extends BaseIntegrationTest {
     @Autowired
     private SlidingWindowRateLimiterService rateLimiterService;
 
@@ -34,20 +33,6 @@ public class SlidingWindowRateLimiterStressTest {
     private RateLimiterProperties props;
 
     private static final String TEST_KEY = "stress-test-client";
-
-    @Container
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
-            .withExposedPorts(6379);
-
-    @DynamicPropertySource
-    static void redisProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.data.redis.host", redis::getHost);
-        registry.add("spring.data.redis.port", redis::getFirstMappedPort);
-
-        // Test properties - use longer windows to avoid timing issues
-        registry.add("app.rate-limiter.limit", () -> 10);
-        registry.add("app.rate-limiter.window-size-ms", () -> 1000);
-    }
 
     // Run the test 100 times to catch race conditions
     @RepeatedTest(100)
