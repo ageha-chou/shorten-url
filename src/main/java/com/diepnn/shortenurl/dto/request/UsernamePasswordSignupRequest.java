@@ -19,11 +19,11 @@ public class UsernamePasswordSignupRequest {
 
     @NotNull(message = "First name is required")
     @Pattern(regexp = "^[\\p{L}\\p{M}]{1,30}$", message = "First name is required and must only contain letters")
-    @Schema(example = "First name", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(example = "Firstname", requiredMode = Schema.RequiredMode.REQUIRED)
     private String firstName;
 
     @NotNull(message = "Last name is required")
-    @Schema(example = "Last name", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(example = "Lastname", requiredMode = Schema.RequiredMode.REQUIRED)
     @Pattern(regexp = "^[\\p{L}\\p{M}]{1,30}$", message = "Last name is required and must only contain letters")
     private String lastName;
 

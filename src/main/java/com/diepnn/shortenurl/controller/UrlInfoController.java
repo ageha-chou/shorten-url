@@ -137,4 +137,11 @@ public class UrlInfoController {
         urlInfoService.delete(id, userDetails);
         return ResponseWrapperBuilder.withNoData(HttpStatus.NO_CONTENT, "Deleted successfully");
     }
+
+    @PatchMapping("/{id}/deactivate")
+    @ResponseStatus(HttpStatus.OK)
+    public BaseResponseWrapper<Void> deactivateUrlInfo(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails userDetails) {
+        urlInfoService.deactivateUrlInfo(id, userDetails);
+        return ResponseWrapperBuilder.withNoData(HttpStatus.OK, "Deactivated successfully");
+    }
 }

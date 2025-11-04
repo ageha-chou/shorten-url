@@ -24,6 +24,7 @@ public abstract class UsersMapper implements BaseMapper<Users, UserDTO> {
     @Mapping(target = "username", expression = "java(org.apache.commons.lang3.StringUtils.lowerCase(userRequest.getUsername()))")
     @Mapping(target = "email", expression = "java(org.apache.commons.lang3.StringUtils.lowerCase(userRequest.getEmail()))")
     @Mapping(target = "password", qualifiedByName = "encodePassword")
+    @Mapping(target = "role", expression = "java(com.diepnn.shortenurl.common.enums.UserRole.USER)")
     @Mapping(target = "avatar", ignore = true)
     @Mapping(target = "updatedDatetime", ignore = true)
     public abstract Users toEntity(UsernamePasswordSignupRequest userRequest);

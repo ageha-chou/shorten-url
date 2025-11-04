@@ -86,6 +86,18 @@ public class UrlInfo {
     @Column
     private LocalDateTime deletedDatetime;
 
+    /** Reason for deactivation of the short URL. */
+    @Column
+    private String deactivatedReason;
+
+    /** Timestamp when the short URL was deactivated (UTC). */
+    @Column
+    private LocalDateTime deactivatedDatetime;
+
+    /** User ID who deactivated the short URL. */
+    @Column
+    private Long deactivatedBy;
+
     /**
      * The user's id who created the short URL.
      */

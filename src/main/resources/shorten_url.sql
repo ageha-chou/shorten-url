@@ -12,6 +12,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 create table users (
    id bigint auto_increment,
+   role_code varchar(50),
    email varchar(255),
    avatar varchar(2000),
    username varchar(50),
@@ -43,7 +44,7 @@ create table url_info (
 	short_code varchar(50) not null,
 	original_url varchar(2048),
 	is_alias bit,
-	status varchar(1),
+	status varchar(2),
     created_by bigint,
     created_by_ip varchar(30),
     created_by_user_agent varchar(512),
@@ -51,8 +52,12 @@ create table url_info (
     updated_datetime timestamp,
 	last_access_datetime timestamp,
 	deleted_datetime timestamp,
+    deactivated_by bigint,
+    deactivated_reason varchar(200),
+    deactivated_datetime timestamp,
 	primary key (id),
     constraint fk_url_info_users foreign key (created_by) references users(id),
+    constraint fk_url_info_users_1 foreign key (deactivated_by) references users(id),
     unique index uidx_url_info_original_url(short_code)
 );
 
