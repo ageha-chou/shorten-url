@@ -1,6 +1,8 @@
 package com.diepnn.shortenurl.entity;
 
+import com.diepnn.shortenurl.common.enums.UserRole;
 import com.diepnn.shortenurl.common.enums.UsersStatus;
+import com.diepnn.shortenurl.converter.UserRoleConverter;
 import com.diepnn.shortenurl.converter.UsersStatusConverter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.CascadeType;
@@ -22,6 +24,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -42,6 +45,10 @@ public class Users {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "role_code")
+    @Convert(converter = UserRoleConverter.class)
+    private UserRole role;
 
     @Column
     private String email;
@@ -79,7 +86,17 @@ public class Users {
     @JsonIgnore
     private List<AuthProvider> authProviders;
 
+    @JsonIgnore
     public boolean isActive() {
         return status == UsersStatus.ACTIVE;
+    }
+
+    @JsonIgnore
+    public List<String> getAuthorities() {
+        if (role == null) {
+            return List.of();
+        }
+
+        return List.of(role.name());
     }
 }

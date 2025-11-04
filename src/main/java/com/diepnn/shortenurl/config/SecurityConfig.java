@@ -1,5 +1,6 @@
 package com.diepnn.shortenurl.config;
 
+import com.diepnn.shortenurl.common.enums.UserRole;
 import com.diepnn.shortenurl.security.CustomAuthenticationEntryPoint;
 import com.diepnn.shortenurl.security.CustomOAuth2UserService;
 import com.diepnn.shortenurl.security.JwtCacheService;
@@ -16,6 +17,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -34,6 +36,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 @Slf4j
 public class SecurityConfig {
@@ -42,9 +45,10 @@ public class SecurityConfig {
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
 
+    // ===== 1) Protect only the ADMIN OpenAPI docs with Basic Auth =====
     @Bean
     @Order(1)
-    public SecurityFilterChain swaggerSecurityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain adminSwaggerDocs(HttpSecurity http) throws Exception {
         InMemoryUserDetailsManager swaggerUser = new InMemoryUserDetailsManager(
                 User.withUsername("swagger-admin")
                     .password(bCryptPasswordEncoder.encode("swagger-pass"))
@@ -52,24 +56,41 @@ public class SecurityConfig {
                     .build()
         );
 
-        http.securityMatcher("/swagger-ui.html",
-                             "/swagger-ui/**",
-                             "/v3/api-docs/**",
-                             "/swagger-resources/**",
-                             "/webjars/**"
-                            )
-            .authorizeHttpRequests(request -> request.anyRequest().hasRole("SWAGGER"))
+        http.securityMatcher("/v3/api-docs/admin/**") // only admin spec + admin swagger-config
+            .authorizeHttpRequests(auth -> auth.anyRequest().hasRole("SWAGGER"))
             .httpBasic(Customizer.withDefaults())
             .authenticationProvider(swaggerAuthenticationProvider(swaggerUser))
-            .formLogin(AbstractHttpConfigurer::disable)
+            .csrf(AbstractHttpConfigurer::disable)
+            .formLogin(AbstractHttpConfigurer::disable);
+
+        return http.build();
+    }
+
+    // ===== 2) Leave USER docs + Swagger static assets open =====
+    @Bean
+    @Order(2)
+    public SecurityFilterChain publicSwaggerAssets(HttpSecurity http) throws Exception {
+        http.securityMatcher(
+                    "/swagger-ui.html",
+                    "/swagger-ui/**",
+                    "/swagger-resources/**",
+                    "/webjars/**",
+                    // user group docs + default swagger-config
+                    "/v3/api-docs/**"
+                            )
+            // admin docs are already handled by the chain above;
+            // everything else here is public
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
             .csrf(AbstractHttpConfigurer::disable);
+
         return http.build();
     }
 
     @Bean
-    @Order(2)
+    @Order(3)
     public SecurityFilterChain apiSecurity(HttpSecurity http, JwtAuthenticationFilter jwtFilter) throws Exception {
         http.authorizeHttpRequests(request ->
+                                           // --- Public endpoints ---
                                            request.requestMatchers(HttpMethod.GET,
                                                                    "/*")
                                                   .permitAll()
@@ -80,6 +101,12 @@ public class SecurityConfig {
                                                   .permitAll()
                                                   .requestMatchers("/oauth2/**", "/login/oauth2/**")
                                                   .permitAll()
+
+                                                  // --- Admin-only endpoints ---
+                                                  .requestMatchers("/api/*/admin/**").hasAuthority(UserRole.ADMIN.getValue())
+
+                                                  // --- The rest of API requires USER role ---
+                                                  .requestMatchers("/api/**").hasAuthority(UserRole.USER.getValue())
                                                   .anyRequest().authenticated()
                                   )
             .oauth2Login(oauth2 ->

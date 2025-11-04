@@ -4,6 +4,7 @@ import com.diepnn.shortenurl.entity.Users;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
 import org.springframework.security.core.CredentialsContainer;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -20,7 +21,11 @@ import java.util.Optional;
  * The custom user details implementation for Spring Security.
  */
 public class CustomUserDetails implements UserDetails, OAuth2User, CredentialsContainer {
+    @Getter
+    @JsonProperty("user")
     private final Users user;
+
+    @JsonIgnore
     private final List<? extends GrantedAuthority> authorities;
 
     @JsonIgnore
@@ -33,33 +38,27 @@ public class CustomUserDetails implements UserDetails, OAuth2User, CredentialsCo
     }
 
     @JsonCreator
-    public CustomUserDetails(@JsonProperty("user") Users user, @JsonProperty("authorities") List<String> authorities) {
+    public CustomUserDetails(@JsonProperty("user") Users user) {
         this.user = user;
-        authorities = Optional.ofNullable(authorities).orElse(List.of());
-        this.authorities = authorities.stream()
-                                      .map(SimpleGrantedAuthority::new)
-                                      .toList();
+        this.authorities = this.user.getAuthorities().stream()
+                                    .map(SimpleGrantedAuthority::new)
+                                    .toList();
     }
 
     // Constructor for OAuth2 authentication
-    public CustomUserDetails(Users user, List<String> authorities, Map<String, Object> attributes) {
-        this(user, authorities);
+    public CustomUserDetails(Users user, Map<String, Object> attributes) {
+        this(user);
         this.attributes = attributes;
     }
 
     // Factory method for regular authentication
     public static CustomUserDetails create(Users user) {
-        return new CustomUserDetails(user, Collections.emptyList());
+        return new CustomUserDetails(user);
     }
 
     // Factory method for OAuth2 authentication
     public static CustomUserDetails create(Users user, Map<String, Object> attributes) {
-        return new CustomUserDetails(user, Collections.emptyList(), attributes);
-    }
-
-    @JsonProperty("user")
-    public Users getUser() {
-        return user;
+        return new CustomUserDetails(user, attributes);
     }
 
     @Override

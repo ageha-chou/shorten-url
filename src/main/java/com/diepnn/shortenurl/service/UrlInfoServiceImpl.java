@@ -1,9 +1,13 @@
 package com.diepnn.shortenurl.service;
 
+import com.diepnn.shortenurl.common.annotation.Admin;
+import com.diepnn.shortenurl.common.annotation.validation.User;
 import com.diepnn.shortenurl.common.enums.UrlInfoStatus;
 import com.diepnn.shortenurl.dto.UrlInfoDTO;
 import com.diepnn.shortenurl.dto.UserInfo;
 import com.diepnn.shortenurl.dto.cache.UrlInfoCache;
+import com.diepnn.shortenurl.dto.filter.UrlInfoFilter;
+import com.diepnn.shortenurl.dto.request.DeactivateUrlInfo;
 import com.diepnn.shortenurl.dto.request.UpdateOriginalUrl;
 import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.entity.UrlInfo;
@@ -20,6 +24,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -29,6 +35,7 @@ import org.springframework.util.CollectionUtils;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Database-backed implementation of {@link UrlInfoService}
@@ -36,7 +43,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class UrlInfoServiceImpl implements UrlInfoService {
+public class UrlInfoServiceImpl extends BaseService implements UrlInfoService {
     private final UrlInfoRepository urlInfoRepository;
     private final ShortCodeService shortCodeService;
     private final UrlInfoMapper urlInfoMapper;
@@ -56,7 +63,7 @@ public class UrlInfoServiceImpl implements UrlInfoService {
                                  .id(id)
                                  .originalUrl(userRequest.getOriginalUrl())
                                  .status(UrlInfoStatus.ACTIVE)
-                                 .alias(userRequest.getAlias() != null)
+                                 .alias(StringUtils.isNotBlank(shortCode))
                                  .shortCode(shortCode)
                                  .userId(userId)
                                  .createdByIp(userInfo.ipAddress())
@@ -134,7 +141,7 @@ public class UrlInfoServiceImpl implements UrlInfoService {
 
         Long ownerId = urlInfo.getUserId();
         Long currentUserId = userDetails.getId();
-        if (ownerId == null || !ownerId.equals(currentUserId)) {
+        if (notBelongToCurrentUser(ownerId, currentUserId)) {
             throw new AccessDeniedException("URL not belongs to current user");
         }
 
@@ -153,7 +160,7 @@ public class UrlInfoServiceImpl implements UrlInfoService {
 
         Long ownerId = urlInfo.getUserId();
         Long currentUserId = userDetails.getId();
-        if (ownerId == null || !ownerId.equals(currentUserId)) {
+        if (notBelongToCurrentUser(ownerId, currentUserId)) {
             throw new AccessDeniedException("URL not belongs to current user");
         }
 
@@ -161,6 +168,51 @@ public class UrlInfoServiceImpl implements UrlInfoService {
         urlInfoCacheService.evictUserUrlsCache(userDetails.getId());
         urlInfoCacheService.evictUrlAccessCache(urlInfo.getShortCode());
     }
+
+    @Transactional
+    @Override
+    @User
+    public void deactivateUrlInfo(Long urlId, CustomUserDetails userDetails) {
+        UrlInfo urlInfo = findById(urlId);
+        if (notBelongToCurrentUser(urlInfo.getUserId(), userDetails.getId())) {
+            throw new AccessDeniedException("URL not belongs to current user");
+        }
+
+        //evict all caches
+        urlInfoCacheService.evictUrlAccessCache(urlInfo.getShortCode());
+        urlInfoCacheService.evictUserUrlsCache(urlInfo.getUserId());
+
+        String deactivatedReason = String.format("Deactivated by %s", userDetails.getUsername());
+        urlInfoRepository.deactivateUrlInfo(urlId, deactivatedReason, userDetails.getId());
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    @Admin
+    public Page<UrlInfoDTO> findAllUrl(UrlInfoFilter filter, Pageable pageable) {
+        Page<UrlInfo> page = urlInfoRepository.findAll(filter, pageable);
+
+        if (page.isEmpty()) {
+            log.debug("Not found URL for filter {}", filter);
+            throw new NotFoundException("URL not found");
+        }
+
+        return page.map(urlInfoMapper::toDto);
+    }
+
+    @Transactional
+    @Override
+    @Admin
+    public void deactivateUrlInfo(Long urlId, DeactivateUrlInfo userRequest, CustomUserDetails userDetails) {
+        UrlInfo urlInfo = findById(urlId);
+
+        //evict all caches
+        urlInfoCacheService.evictUrlAccessCache(urlInfo.getShortCode());
+        urlInfoCacheService.evictUserUrlsCache(urlInfo.getUserId());
+
+        urlInfoRepository.deactivateUrlInfo(urlId, userRequest.getDeactivatedReason(), userDetails.getId());
+    }
+
 
     private UrlInfo findById(Long urlId) {
         return urlInfoRepository.findById(urlId)

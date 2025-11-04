@@ -31,8 +31,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final UserDetailsService userDetailsService;
     private final AuthenticationEntryPoint authenticationEntryPoint;
 
-    private final List<String> skipAuthPrefix = Arrays.asList("Basic");
-
     /**
      * Check if the JWT token is valid and set the authentication context.
      *

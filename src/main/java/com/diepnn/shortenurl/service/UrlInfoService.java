@@ -3,9 +3,13 @@ package com.diepnn.shortenurl.service;
 import com.diepnn.shortenurl.dto.UrlInfoDTO;
 import com.diepnn.shortenurl.dto.UserInfo;
 import com.diepnn.shortenurl.dto.cache.UrlInfoCache;
+import com.diepnn.shortenurl.dto.filter.UrlInfoFilter;
+import com.diepnn.shortenurl.dto.request.DeactivateUrlInfo;
 import com.diepnn.shortenurl.dto.request.UpdateOriginalUrl;
 import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.security.CustomUserDetails;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -61,4 +65,31 @@ public interface UrlInfoService {
      * @param userDetails user information
      */
     void delete(Long urlId, CustomUserDetails userDetails);
+
+    /**
+     * Find all url info by filter.
+     *
+     * @param filter url info filter
+     * @param pageable pageable object
+     * @return url info list
+     */
+    Page<UrlInfoDTO> findAllUrl(UrlInfoFilter filter, Pageable pageable);
+
+    /**
+     * Deactivate url info by id used by {@code ADMIN} authority.
+     *
+     * @param urlId url info id
+     * @param userRequest user request
+     * @param userDetails user details
+     */
+    void deactivateUrlInfo(Long urlId, DeactivateUrlInfo userRequest, CustomUserDetails userDetails);
+
+    /**
+     * Deactivate url info by id used by {@code USER} authority.
+     * Deny the request if the url info is not owned by the authenticated user.
+     *
+     * @param urlId url info id
+     * @param userDetails user details
+     */
+    void deactivateUrlInfo(Long urlId, CustomUserDetails userDetails);
 }

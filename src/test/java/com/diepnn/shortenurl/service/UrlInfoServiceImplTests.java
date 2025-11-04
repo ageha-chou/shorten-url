@@ -3,6 +3,8 @@ package com.diepnn.shortenurl.service;
 import com.diepnn.shortenurl.common.enums.UrlInfoStatus;
 import com.diepnn.shortenurl.dto.UrlInfoDTO;
 import com.diepnn.shortenurl.dto.UserInfo;
+import com.diepnn.shortenurl.dto.filter.UrlInfoFilter;
+import com.diepnn.shortenurl.dto.request.DeactivateUrlInfo;
 import com.diepnn.shortenurl.dto.request.UpdateOriginalUrl;
 import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.entity.UrlInfo;
@@ -24,7 +26,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.BeanUtils;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDateTime;
@@ -41,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -397,6 +406,103 @@ public class UrlInfoServiceImplTests {
             verify(urlInfoRepository).deleteByIdAndUserId(mockUrlInfo.getId(), userId);
             verify(urlInfoCacheService).evictUserUrlsCache(userId);
             verify(urlInfoCacheService).evictUrlAccessCache(mockUrlInfo.getShortCode());
+        }
+    }
+
+    @Nested
+    @DisplayName("Test findAll function")
+    class FindAllUrlTests {
+        UrlInfoFilter filter = new UrlInfoFilter(null, null, null, null, null, null, null);
+        Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdDatetime"));
+
+        @Test
+        void whenNotFound_ThrowException() {
+            PageImpl<UrlInfo> urlInfos = new PageImpl<>(Collections.emptyList());
+            when(urlInfoRepository.findAll(any(UrlInfoFilter.class), any(Pageable.class))).thenReturn(urlInfos);
+
+            assertThrows(NotFoundException.class, () -> urlService.findAllUrl(filter, pageable));
+        }
+
+        @Test
+        void whenFound_ReturnListUrlInfo() {
+            UrlInfo mockUrlInfo1 = new UrlInfo();
+            BeanUtils.copyProperties(mockUrlInfo, mockUrlInfo1);
+            mockUrlInfo1.setId(1L);
+            List<UrlInfo> urlInfos = List.of(mockUrlInfo, mockUrlInfo1);
+
+            PageImpl<UrlInfo> urlInfoPage = new PageImpl<>(urlInfos);
+
+            when(urlInfoRepository.findAll(any(UrlInfoFilter.class), any(Pageable.class))).thenReturn(urlInfoPage);
+            when(urlInfoMapper.toDto(any(UrlInfo.class))).thenReturn(mockDto);
+
+            Page<UrlInfoDTO> urls = urlService.findAllUrl(filter, pageable);
+            assertEquals(2, urls.getTotalElements());
+            assertEquals(2, urls.getNumberOfElements());
+            assertEquals(1, urls.getTotalPages());
+            assertEquals(0, urls.getNumber());
+            assertEquals(2, urls.getSize());
+            assertEquals(mockDto, urls.getContent().get(0));
+            assertEquals(mockDto, urls.getContent().get(1));
+        }
+    }
+
+    @Nested
+    @DisplayName("Test deactivateUrlInfo function")
+    class DeactivateUrlInfoTests {
+        DeactivateUrlInfo request;
+        CustomUserDetails mockUserDetails;
+
+        @BeforeEach
+        void init() {
+            request = new DeactivateUrlInfo("Spam content detected");
+            mockUserDetails = CustomUserDetails.create(Users.builder().id(userId).username("mockuser").build());
+        }
+
+        @Test
+        @DisplayName("Should deactivate URL and evict caches successfully")
+        void whenUrlExists_ShouldDeactivateAndEvictCaches() {
+            Long urlId = 1L;
+
+            when(urlInfoRepository.findById(urlId)).thenReturn(Optional.of(mockUrlInfo));
+            doNothing().when(urlInfoCacheService).evictUrlAccessCache(mockUrlInfo.getShortCode());
+            doNothing().when(urlInfoCacheService).evictUserUrlsCache(mockUrlInfo.getUserId());
+            doNothing().when(urlInfoRepository).deactivateUrlInfo(urlId, request.getDeactivatedReason(), mockUserDetails.getId());
+
+            urlService.deactivateUrlInfo(urlId, request, mockUserDetails);
+
+            verify(urlInfoRepository).findById(urlId);
+            verify(urlInfoCacheService).evictUrlAccessCache(mockUrlInfo.getShortCode());
+            verify(urlInfoCacheService).evictUserUrlsCache(mockUrlInfo.getUserId());
+            verify(urlInfoRepository).deactivateUrlInfo(urlId, request.getDeactivatedReason(), mockUserDetails.getId());
+        }
+
+        @Test
+        @DisplayName("Should throw NotFoundException when URL not found")
+        void whenUrlNotFound_ShouldThrowNotFoundException() {
+            when(urlInfoRepository.findById(mockId)).thenReturn(Optional.empty());
+
+            NotFoundException ex = assertThrows(NotFoundException.class,
+                                                () -> urlService.deactivateUrlInfo(mockId, request, mockUserDetails));
+
+            assertEquals("URL not found", ex.getMessage());
+            verify(urlInfoRepository).findById(mockId);
+            verify(urlInfoCacheService, never()).evictUrlAccessCache(any());
+            verify(urlInfoCacheService, never()).evictUserUrlsCache(any());
+            verify(urlInfoRepository, never()).deactivateUrlInfo(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("Should pass correct parameters to repository")
+        void shouldPassCorrectParametersToRepository() {
+            when(urlInfoRepository.findById(mockId)).thenReturn(Optional.of(mockUrlInfo));
+
+            urlService.deactivateUrlInfo(mockId, request, mockUserDetails);
+
+            verify(urlInfoRepository).deactivateUrlInfo(
+                    eq(mockId),
+                    eq(request.getDeactivatedReason()),
+                    eq(mockUserDetails.getId())
+            );
         }
     }
 }

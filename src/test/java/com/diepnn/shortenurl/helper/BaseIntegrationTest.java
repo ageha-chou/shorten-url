@@ -1,7 +1,6 @@
 package com.diepnn.shortenurl.helper;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestMethodOrder;
@@ -14,7 +13,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.util.List;
@@ -23,11 +21,9 @@ import java.util.concurrent.TimeUnit;
 @ActiveProfiles("test")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.MethodName.class)
-@Testcontainers
 public abstract class BaseIntegrationTest {
     @Container
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
-            .withExposedPorts(6379);
+    static GenericContainer<?> redis;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -35,17 +31,26 @@ public abstract class BaseIntegrationTest {
     @Autowired(required = false)
     protected RedisTemplate<String, Object> redisTemplate;
 
+    static {
+        // Start container in static block BEFORE @DynamicPropertySource
+        redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+                .withExposedPorts(6379);
+        redis.start();
+
+        System.out.println("Redis container started on port: " + redis.getMappedPort(6379));
+
+        // Ensure cleanup on JVM shutdown
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (redis.isRunning()) {
+                redis.stop();
+            }
+        }));
+    }
+
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry r) {
         r.add("spring.data.redis.host", redis::getHost);
         r.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
-    }
-
-    @BeforeEach
-    void setUp() {
-        if (!redis.isRunning()) {
-            redis.start();
-        }
     }
 
     @AfterEach

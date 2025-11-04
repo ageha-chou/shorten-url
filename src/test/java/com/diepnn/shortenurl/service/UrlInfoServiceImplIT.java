@@ -1,9 +1,13 @@
 package com.diepnn.shortenurl.service;
 
 import com.diepnn.shortenurl.common.enums.UrlInfoStatus;
+import com.diepnn.shortenurl.common.enums.UserRole;
+import com.diepnn.shortenurl.common.enums.UsersStatus;
 import com.diepnn.shortenurl.dto.UrlInfoDTO;
 import com.diepnn.shortenurl.dto.UserInfo;
 import com.diepnn.shortenurl.dto.cache.UrlInfoCache;
+import com.diepnn.shortenurl.dto.filter.UrlInfoFilter;
+import com.diepnn.shortenurl.dto.request.DeactivateUrlInfo;
 import com.diepnn.shortenurl.dto.request.UpdateOriginalUrl;
 import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.entity.UrlInfo;
@@ -11,25 +15,38 @@ import com.diepnn.shortenurl.entity.Users;
 import com.diepnn.shortenurl.exception.AliasAlreadyExistsException;
 import com.diepnn.shortenurl.exception.NotFoundException;
 import com.diepnn.shortenurl.helper.BaseIntegrationTest;
+import com.diepnn.shortenurl.helper.WithMockAdmin;
+import com.diepnn.shortenurl.helper.WithMockRegularUser;
 import com.diepnn.shortenurl.repository.UrlInfoRepository;
 import com.diepnn.shortenurl.repository.UsersRepository;
 import com.diepnn.shortenurl.security.CustomUserDetails;
 import com.diepnn.shortenurl.service.cache.UrlInfoCacheService;
 import com.diepnn.shortenurl.utils.DateUtils;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.CacheManager;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -45,6 +62,8 @@ public class UrlInfoServiceImplIT extends BaseIntegrationTest {
 
     private UrlInfoCache mockUrlInfoCache;
     private String validShortCode;
+    @Autowired
+    private UrlInfoCacheService urlInfoCacheService;
 
     @BeforeEach
     void setUp() {
@@ -403,6 +422,534 @@ public class UrlInfoServiceImplIT extends BaseIntegrationTest {
             assertTrue(userUrls.stream().noneMatch(url -> url.getId().equals(testUrlInfo.getId())),
                        "URL should be removed from cache");
             assertNull(urlInfoCache, "Cache should be evicted");
+        }
+    }
+
+    @Nested
+    class FindAllUrlTests {
+        @Autowired
+        private UrlInfoService urlInfoService;
+
+        @Autowired
+        private UrlInfoRepository urlInfoRepository;
+
+        @Autowired
+        private UsersRepository userRepository;
+
+        @Value("${app.short-base-url}")
+        private String shortBaseUrl;
+
+        private Users testUser;
+        private Users adminUser;
+        private UrlInfo urlInfo1;
+        private UrlInfo urlInfo2;
+        private UrlInfo urlInfo3;
+
+        @BeforeEach
+        void setUp() {
+            // Create test users
+            testUser = Users.builder()
+                            .email("user@test.com")
+                            .password("password123")
+                            .role(UserRole.USER)
+                            .status(UsersStatus.ACTIVE)
+                            .createdDatetime(LocalDateTime.now())
+                            .build();
+            testUser = userRepository.save(testUser);
+
+            adminUser = Users.builder()
+                             .email("admin@test.com")
+                             .password("admin123")
+                             .role(UserRole.ADMIN)
+                             .status(UsersStatus.ACTIVE)
+                             .createdDatetime(LocalDateTime.now())
+                             .build();
+            adminUser = userRepository.save(adminUser);
+
+            // Create test URL infos
+            urlInfo1 = UrlInfo.builder()
+                              .id(1L)
+                              .shortCode("abc123")
+                              .originalUrl("https://example1.com")
+                              .userId(testUser.getId())
+                              .status(UrlInfoStatus.ACTIVE)
+                              .createdDatetime(LocalDateTime.now().minusDays(1))
+                              .build();
+            urlInfo1 = urlInfoRepository.save(urlInfo1);
+
+            urlInfo2 = UrlInfo.builder()
+                              .id(2L)
+                              .shortCode("xyz789")
+                              .originalUrl("https://example2.com")
+                              .userId(testUser.getId())
+                              .status(UrlInfoStatus.ACTIVE)
+                              .createdDatetime(LocalDateTime.now())
+                              .build();
+            urlInfo2 = urlInfoRepository.save(urlInfo2);
+
+            urlInfo3 = UrlInfo.builder()
+                              .id(3L)
+                              .shortCode("def456")
+                              .originalUrl("https://example3.com")
+                              .userId(testUser.getId())
+                              .status(UrlInfoStatus.ACTIVE)
+                              .createdDatetime(LocalDateTime.now().plusDays(1))
+                              .build();
+            urlInfo3 = urlInfoRepository.save(urlInfo3);
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should return all URLs with pagination")
+        void withPagination_ShouldReturnCorrectPage() {
+            UrlInfoFilter filter = new UrlInfoFilter(null, null, null, null, null, null, null);
+            Pageable pageable = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdDatetime"));
+
+            Page<UrlInfoDTO> result = urlInfoService.findAllUrl(filter, pageable);
+
+            assertNotNull(result);
+            assertEquals(2, result.getSize());
+            assertEquals(3, result.getTotalElements());
+            assertEquals(2, result.getTotalPages());
+            assertEquals(0, result.getNumber());
+            assertEquals(2, result.getContent().size());
+
+            // Verify content is mapped correctly
+            List<String> shortCodes = result.getContent().stream()
+                                            .map(x -> x.getShortUrl().replace(shortBaseUrl + "/", ""))
+                                            .toList();
+
+            assertTrue(shortCodes.contains("xyz789") || shortCodes.contains("def456"),
+                       "Expected result content to contain at least one of the short codes: xyz789, def456"
+            );
+
+            //get next page
+            pageable = result.nextPageable();
+            result = urlInfoService.findAllUrl(filter, pageable);
+            assertNotNull(result);
+            assertEquals(2, result.getSize());
+            assertEquals(3, result.getTotalElements());
+            assertEquals(2, result.getTotalPages());
+            assertEquals(1, result.getNumber());
+            assertEquals(1, result.getContent().size());
+
+            shortCodes = result.getContent().stream()
+                               .map(x -> x.getShortUrl().replace(shortBaseUrl + "/", ""))
+                               .toList();
+
+            assertTrue(shortCodes.contains("abc123"),
+                       "Expected result content to contain at least one of the short codes: abc123"
+            );
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should return second page correctly")
+        void secondPage_ShouldReturnRemainingUrls() {
+            UrlInfoFilter filter = new UrlInfoFilter(null, null, null, null, null, null, null);
+            Pageable pageable = PageRequest.of(1, 2);
+
+            Page<UrlInfoDTO> result = urlInfoService.findAllUrl(filter, pageable);
+
+            assertNotNull(result);
+            assertEquals(1, result.getContent().size());
+            assertEquals(1, result.getNumber());
+            assertTrue(result.isLast());
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should filter by userId")
+        void withUserIdFilter_ShouldReturnFilteredResults() {
+            // Given
+            // Create another user with different URLs
+            Users anotherUser = Users.builder()
+                                     .email("another@test.com")
+                                     .password("password")
+                                     .role(UserRole.USER)
+                                     .status(UsersStatus.ACTIVE)
+                                     .createdDatetime(LocalDateTime.now())
+                                     .build();
+            anotherUser = userRepository.save(anotherUser);
+
+            UrlInfo anotherUrlInfo = UrlInfo.builder()
+                                            .id(4L)
+                                            .shortCode("another123")
+                                            .originalUrl("https://another.com")
+                                            .userId(anotherUser.getId())
+                                            .status(UrlInfoStatus.ACTIVE)
+                                            .createdDatetime(LocalDateTime.now())
+                                            .build();
+            urlInfoRepository.save(anotherUrlInfo);
+
+            UrlInfoFilter filter = new UrlInfoFilter(null, null, null, null, Set.of(testUser.getId()),
+                                                     null, null);
+            Pageable pageable = PageRequest.of(0, 10);
+
+            Page<UrlInfoDTO> result = urlInfoService.findAllUrl(filter, pageable);
+
+            assertEquals(3, result.getTotalElements());
+            List<String> shortCodes = result.getContent().stream()
+                                            .map(x -> x.getShortUrl().replace(shortBaseUrl + "/", ""))
+                                            .toList();
+
+            assertTrue(shortCodes.contains("abc123") || shortCodes.contains("xyz789") || shortCodes.contains("def456"),
+                       "Expected result content to contain at least one of the short codes: abc123, xyz789, def456"
+            );
+
+            assertFalse(shortCodes.contains("another123"), "Expected result content to not contain short code: another123");
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should throw NotFoundException when no URLs found")
+        void whenNoUrlsFound_ShouldThrowNotFoundException() {
+            urlInfoRepository.deleteAll();
+            UrlInfoFilter filter = new UrlInfoFilter(null, null, null, null, null, null, null);
+            Pageable pageable = PageRequest.of(0, 10);
+
+            NotFoundException ex = assertThrows(NotFoundException.class, () -> urlInfoService.findAllUrl(filter, pageable));
+            assertEquals("URL not found", ex.getMessage());
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should filter by ACTIVE status")
+        void withActiveFilter_ShouldReturnOnlyActiveUrls() {
+            // Deactivate one URL manually
+            urlInfo1.setStatus(UrlInfoStatus.DEACTIVATE);
+            urlInfoRepository.saveAndFlush(urlInfo1);
+
+            UrlInfoFilter filter = new UrlInfoFilter(EnumSet.of(UrlInfoStatus.ACTIVE), null, null, null, null, null, null);
+            Pageable pageable = PageRequest.of(0, 10);
+
+            Page<UrlInfoDTO> result = urlInfoService.findAllUrl(filter, pageable);
+
+            assertEquals(2, result.getTotalElements());
+            List<String> shortCodes = result.getContent().stream()
+                                            .map(x -> x.getShortUrl().replace(shortBaseUrl + "/", ""))
+                                            .toList();
+
+            assertTrue(shortCodes.contains("xyz789") || shortCodes.contains("def456"),
+                       "Expected result content to contain at least one of the short codes: xyz789, def456"
+            );
+
+            assertFalse(shortCodes.contains("abc123"), "Expected result content to not contain short code: abc123");
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should handle empty page correctly")
+        void withPageBeyondData_ShouldThrowNotFoundException() {
+            UrlInfoFilter filter = new UrlInfoFilter(null, null, null, null, null, null, null);
+            Pageable pageable = PageRequest.of(10, 10); // Page way beyond available data
+
+            NotFoundException ex = assertThrows(NotFoundException.class, () -> urlInfoService.findAllUrl(filter, pageable));
+            assertEquals("URL not found", ex.getMessage());
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Admin user should have access")
+        void withAdminRole_ShouldAllowAccess() {
+            UrlInfoFilter filter = new UrlInfoFilter(null, null, null, null, null, null, null);
+            Pageable pageable = PageRequest.of(0, 10);
+
+            // No exception should be thrown
+            Page<UrlInfoDTO> page = urlInfoService.findAllUrl(filter, pageable);
+            assertNotNull(page);
+            assertFalse(page.getContent().isEmpty(), "Page should not be empty");
+        }
+
+        @Test
+        @WithMockUser
+        @DisplayName("Regular user should be denied access")
+        void withUserRole_ShouldDenyAccess() {
+            UrlInfoFilter filter = new UrlInfoFilter(null, null, null, null, null, null, null);
+            Pageable pageable = PageRequest.of(0, 10);
+
+            assertThrows(AccessDeniedException.class, () -> urlInfoService.findAllUrl(filter, pageable));
+        }
+
+        @Test
+        @DisplayName("Unauthenticated user should be denied access")
+        void withoutAuthentication_ShouldDenyAccess() {
+            UrlInfoFilter filter = new UrlInfoFilter(null, null, null, null, null, null, null);
+
+            Pageable pageable = PageRequest.of(0, 10);
+            assertThrows(AuthenticationCredentialsNotFoundException.class, () -> urlInfoService.findAllUrl(filter, pageable));
+        }
+    }
+
+    @Nested
+    class DeactivateUrlInfoTests {
+        @Autowired
+        private UrlInfoService urlInfoService;
+
+        @Autowired
+        private UrlInfoRepository urlInfoRepository;
+
+        @Autowired
+        private UsersRepository userRepository;
+
+        @Value("${app.short-base-url}")
+        private String shortBaseUrl;
+
+        private Users testUser;
+        private Users adminUser;
+        private UrlInfo urlInfo1;
+        private UrlInfo urlInfo2;
+        private UrlInfo urlInfo3;
+        private CustomUserDetails adminUserDetails;
+
+        @BeforeEach
+        void setUp() {
+            // Create test users
+            testUser = Users.builder()
+                            .email("user@test.com")
+                            .password("password123")
+                            .role(UserRole.USER)
+                            .status(UsersStatus.ACTIVE)
+                            .createdDatetime(LocalDateTime.now())
+                            .build();
+            testUser = userRepository.save(testUser);
+
+            adminUser = Users.builder()
+                             .email("admin@test.com")
+                             .password("admin123")
+                             .role(UserRole.ADMIN)
+                             .status(UsersStatus.ACTIVE)
+                             .createdDatetime(LocalDateTime.now())
+                             .build();
+            adminUser = userRepository.save(adminUser);
+
+            // Create test URL infos
+            urlInfo1 = UrlInfo.builder()
+                              .id(1L)
+                              .shortCode("abc123")
+                              .originalUrl("https://example1.com")
+                              .userId(testUser.getId())
+                              .status(UrlInfoStatus.ACTIVE)
+                              .createdDatetime(LocalDateTime.now().minusDays(1))
+                              .build();
+            urlInfo1 = urlInfoRepository.save(urlInfo1);
+
+            urlInfo2 = UrlInfo.builder()
+                              .id(2L)
+                              .shortCode("xyz789")
+                              .originalUrl("https://example2.com")
+                              .userId(testUser.getId())
+                              .status(UrlInfoStatus.ACTIVE)
+                              .createdDatetime(LocalDateTime.now())
+                              .build();
+            urlInfo2 = urlInfoRepository.save(urlInfo2);
+
+            urlInfo3 = UrlInfo.builder()
+                              .id(3L)
+                              .shortCode("def456")
+                              .originalUrl("https://example3.com")
+                              .userId(testUser.getId())
+                              .status(UrlInfoStatus.ACTIVE)
+                              .createdDatetime(LocalDateTime.now().plusDays(1))
+                              .build();
+            urlInfo3 = urlInfoRepository.save(urlInfo3);
+
+            adminUserDetails = CustomUserDetails.create(adminUser);
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should deactivate URL and persist changes")
+        void shouldDeactivateAndPersist() {
+            Long urlId = urlInfo1.getId();
+            String reason = "Spam content detected";
+            DeactivateUrlInfo request = new DeactivateUrlInfo(reason);
+
+            urlInfoService.deactivateUrlInfo(urlId, request, adminUserDetails);
+
+            UrlInfo deactivatedUrl = urlInfoRepository.findById(urlId).orElseThrow();
+            assertEquals(UrlInfoStatus.DEACTIVATE, deactivatedUrl.getStatus(), "URL should be marked as deactivated");
+            assertEquals(reason, deactivatedUrl.getDeactivatedReason());
+            assertEquals(adminUser.getId(), deactivatedUrl.getDeactivatedBy());
+            assertNotNull(deactivatedUrl.getDeactivatedDatetime());
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should evict URL access cache")
+        void shouldEvictUrlAccessCache() {
+            Long urlId = urlInfo1.getId();
+            String shortCode = urlInfo1.getShortCode();
+            DeactivateUrlInfo request = new DeactivateUrlInfo("Policy violation");
+
+            // Populate cache first
+            urlInfoCacheService.findByShortCodeCache(shortCode);
+
+            urlInfoService.deactivateUrlInfo(urlId, request, adminUserDetails);
+
+            // Cache should be evicted
+            if (cacheManager.getCache("url-access") != null) {
+                assertNull(cacheManager.getCache("url-access").get(shortCode));
+            }
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should evict user URLs cache")
+        void deactivateUrlInfo_ShouldEvictUserUrlsCache() {
+            Long urlId = urlInfo1.getId();
+            Long userId = urlInfo1.getUserId();
+            DeactivateUrlInfo request = new DeactivateUrlInfo("Copyright infringement");
+
+            // Populate cache first
+            urlInfoCacheService.findByShortCodeCache(urlInfo1.getShortCode());
+
+            urlInfoService.deactivateUrlInfo(urlId, request, adminUserDetails);
+
+            // Cache should be evicted
+            if (cacheManager != null && cacheManager.getCache("userUrls") != null) {
+                assertNull(cacheManager.getCache("userUrls").get(userId));
+            }
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should throw NotFoundException when URL not found")
+        void deactivateUrlInfo_WithInvalidUrlId_ShouldThrowNotFoundException() {
+            Long invalidUrlId = 99999L;
+            DeactivateUrlInfo request = new DeactivateUrlInfo("Test reason");
+
+            // When & Then
+            NotFoundException ex = assertThrows(NotFoundException.class,
+                                                () -> urlInfoService.deactivateUrlInfo(invalidUrlId, request, adminUserDetails));
+            assertEquals("URL not found", ex.getMessage());
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should not affect other URLs")
+        void shouldNotAffectOtherUrls() {
+            Long urlId = urlInfo1.getId();
+            DeactivateUrlInfo request = new DeactivateUrlInfo("Deactivating first URL");
+
+            urlInfoService.deactivateUrlInfo(urlId, request, adminUserDetails);
+
+            // Then
+            UrlInfo deactivatedUrl = urlInfoRepository.findById(urlInfo1.getId()).orElseThrow();
+            UrlInfo otherUrl2 = urlInfoRepository.findById(urlInfo2.getId()).orElseThrow();
+            UrlInfo otherUrl3 = urlInfoRepository.findById(urlInfo3.getId()).orElseThrow();
+
+            assertEquals(UrlInfoStatus.DEACTIVATE, deactivatedUrl.getStatus());
+            assertEquals(UrlInfoStatus.ACTIVE, otherUrl2.getStatus());
+            assertEquals(UrlInfoStatus.ACTIVE, otherUrl3.getStatus());
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should record correct admin who deactivated")
+        void shouldRecordCorrectAdmin() {
+            Long urlId = urlInfo1.getId();
+            DeactivateUrlInfo request = new DeactivateUrlInfo("Admin action");
+
+            urlInfoService.deactivateUrlInfo(urlId, request, adminUserDetails);
+
+            UrlInfo deactivatedUrl = urlInfoRepository.findById(urlId).orElseThrow();
+            assertEquals(adminUser.getId(), deactivatedUrl.getDeactivatedBy());
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Should not allow deactivating already deactivated URL")
+        void alreadyDeactivated_ShouldUpdateReason() {
+            Long urlId = urlInfo1.getId();
+            DeactivateUrlInfo firstRequest = new DeactivateUrlInfo("First reason");
+            DeactivateUrlInfo secondRequest = new DeactivateUrlInfo("Updated reason");
+
+            // Deactivate first time
+            urlInfoService.deactivateUrlInfo(urlId, firstRequest, adminUserDetails);
+
+            // Deactivate second time
+            urlInfoService.deactivateUrlInfo(urlId, secondRequest, adminUserDetails);
+
+            UrlInfo deactivatedUrl = urlInfoRepository.findById(urlId).orElseThrow();
+            assertEquals(UrlInfoStatus.DEACTIVATE, deactivatedUrl.getStatus());
+            assertEquals(firstRequest.getDeactivatedReason(), deactivatedUrl.getDeactivatedReason());
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Integration - Deactivate URL then verify it doesn't appear in active filter")
+        void shouldNotAppearInActiveFilter() {
+            Long urlId = urlInfo1.getId();
+            DeactivateUrlInfo request = new DeactivateUrlInfo("Test deactivation");
+
+            urlInfoService.deactivateUrlInfo(urlId, request, adminUserDetails);
+
+            UrlInfoFilter filter = new UrlInfoFilter(EnumSet.of(UrlInfoStatus.ACTIVE), null, null, null,
+                                                     null, null, null);
+            Pageable pageable = PageRequest.of(0, 10);
+
+            Page<UrlInfoDTO> result = urlInfoService.findAllUrl(filter, pageable);
+
+            assertEquals(2, result.getTotalElements());
+            List<String> shortCodes = result.getContent()
+                                            .stream().map(x -> x.getShortUrl().replace(shortBaseUrl + "/", ""))
+                                            .toList();
+
+            assertFalse(shortCodes.contains(urlInfo1.getShortCode()),
+                        "Expected result content to not contain short code: " + urlInfo1.getShortCode());
+        }
+
+        @Test
+        @WithMockAdmin
+        @DisplayName("Integration - Deactivate all URLs then findAll should throw exception")
+        void deactivateAllUrlsThenFindAll_ShouldThrowNotFoundException() {
+            DeactivateUrlInfo request = new DeactivateUrlInfo("Mass deactivation");
+
+            urlInfoService.deactivateUrlInfo(urlInfo1.getId(), request, adminUserDetails);
+            urlInfoService.deactivateUrlInfo(urlInfo2.getId(), request, adminUserDetails);
+            urlInfoService.deactivateUrlInfo(urlInfo3.getId(), request, adminUserDetails);
+
+            UrlInfoFilter filter = new UrlInfoFilter(EnumSet.of(UrlInfoStatus.ACTIVE), null, null, null, null, null, null);
+            Pageable pageable = PageRequest.of(0, 10);
+
+            NotFoundException ex = assertThrows(NotFoundException.class, () -> urlInfoService.findAllUrl(filter, pageable));
+            assertEquals("URL not found", ex.getMessage());
+        }
+
+        @Test
+        @WithMockRegularUser
+        @DisplayName("Regular user should be denied access")
+        void withUserRole_ShouldDenyAccess() {
+            Long urlId = urlInfo1.getId();
+            CustomUserDetails regularUserDetails = CustomUserDetails.create(testUser);
+            DeactivateUrlInfo request = new DeactivateUrlInfo("Test deactivation");
+
+            assertThrows(AccessDeniedException.class, () -> urlInfoService.deactivateUrlInfo(urlId, request, regularUserDetails));
+
+            // Verify URL was NOT deactivated
+            UrlInfo notDeactivated = urlInfoRepository.findById(urlId).orElseThrow();
+            assertEquals(UrlInfoStatus.ACTIVE, notDeactivated.getStatus());
+        }
+
+        @Test
+        @WithMockUser(roles = {"USER", "MODERATOR", "EDITOR"})
+        @DisplayName("User with multiple non-admin roles should be denied")
+        void withMultipleNonAdminRoles_ShouldDenyAccess() {
+            Long urlId = urlInfo1.getId();
+            CustomUserDetails regularUserDetails = CustomUserDetails.create(testUser);
+            DeactivateUrlInfo request = new DeactivateUrlInfo("Test deactivation");
+
+            assertThrows(AccessDeniedException.class, () -> urlInfoService.deactivateUrlInfo(urlId, request, regularUserDetails));
+        }
+
+        @Test
+        @DisplayName("Unauthenticated user should be denied access")
+        void withoutAuthentication_ShouldDenyAccess() {
+            Long urlId = urlInfo1.getId();
+            DeactivateUrlInfo request = new DeactivateUrlInfo("Test deactivation");
+
+            assertThrows(AuthenticationCredentialsNotFoundException.class, () -> urlInfoService.deactivateUrlInfo(urlId, request, null));
         }
     }
 }

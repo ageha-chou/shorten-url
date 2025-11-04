@@ -7,6 +7,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -15,6 +16,23 @@ public class SwaggerConfig {
     @Bean
     public ModelResolver modelResolverSnakeCase(ObjectMapper objectMapper) {
         return new ModelResolver(objectMapper.copy());
+    }
+
+    @Bean
+    GroupedOpenApi userApi() {
+        return GroupedOpenApi.builder()
+                             .group("user")
+                             .pathsToMatch("/api/**")
+                             .pathsToExclude("/api/*/admin/**")
+                             .build();
+    }
+
+    @Bean
+    GroupedOpenApi adminApi() {
+        return GroupedOpenApi.builder()
+                             .group("admin")
+                             .pathsToMatch("/api/*/admin/**", "/api/*/auth/**")
+                             .build();
     }
 
     @Bean
