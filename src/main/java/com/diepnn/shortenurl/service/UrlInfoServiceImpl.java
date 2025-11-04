@@ -54,16 +54,16 @@ public class UrlInfoServiceImpl extends BaseService implements UrlInfoService {
     public UrlInfoDTO create(UrlInfoRequest userRequest, UserInfo userInfo, Long userId) {
         long id = shortCodeService.generateId();
 
-        String shortCode = StringUtils.lowerCase(userRequest.getAlias());
-        if (StringUtils.isBlank(shortCode)) {
-            shortCode = shortCodeService.generateShortCode(id);
-        }
+        boolean hasCustomAlias = StringUtils.isNotBlank(userRequest.getAlias());
+        String shortCode = hasCustomAlias
+                           ? userRequest.getAlias().toLowerCase()
+                           : shortCodeService.generateShortCode(id);
 
         UrlInfo urlInfo = UrlInfo.builder()
                                  .id(id)
                                  .originalUrl(userRequest.getOriginalUrl())
                                  .status(UrlInfoStatus.ACTIVE)
-                                 .alias(StringUtils.isNotBlank(shortCode))
+                                 .alias(hasCustomAlias)
                                  .shortCode(shortCode)
                                  .userId(userId)
                                  .createdByIp(userInfo.ipAddress())
