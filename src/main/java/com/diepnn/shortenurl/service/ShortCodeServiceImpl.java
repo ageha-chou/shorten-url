@@ -33,11 +33,9 @@ public class ShortCodeServiceImpl implements ShortCodeService {
      * Generates a new short code by first obtaining a unique ID and then encoding it.
      *
      * @return a compact, URL-safe short code
-     * @throws TooManyRequestException if the underlying ID generator is unable to allocate an ID
-     *                                 due to rate limiting or sequence exhaustion
      */
     @Override
-    public String generateShortCode() throws TooManyRequestException {
+    public String generateShortCode() {
         return urlGenerator.generate(generateId());
     }
 
@@ -51,11 +49,9 @@ public class ShortCodeServiceImpl implements ShortCodeService {
      * Useful for cases where a user-specified alias will be stored instead of a generated code.
      *
      * @return a newly generated unique identifier
-     * @throws TooManyRequestException if the underlying ID generator is unable to allocate an ID
-     *                                 due to rate limiting or sequence exhaustion
      */
     @Override
-    public Long generateId() throws TooManyRequestException {
+    public Long generateId() {
         return idGenerator.generate();
     }
 }

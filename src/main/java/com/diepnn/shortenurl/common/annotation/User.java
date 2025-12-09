@@ -1,4 +1,4 @@
-package com.diepnn.shortenurl.common.annotation.validation;
+package com.diepnn.shortenurl.common.annotation;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 

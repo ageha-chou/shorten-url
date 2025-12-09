@@ -4,6 +4,7 @@ import com.diepnn.shortenurl.common.properties.JwtProperties;
 import com.diepnn.shortenurl.entity.Users;
 import com.diepnn.shortenurl.security.CustomUserDetails;
 import com.diepnn.shortenurl.security.JwtService;
+import com.diepnn.shortenurl.utils.PasswordEncoderMapperHelper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -30,6 +31,9 @@ public abstract class BaseControllerIT extends BaseIntegrationTest {
 
     @Autowired
     protected ObjectMapper objectMapper;
+
+    @Autowired
+    protected PasswordEncoderMapperHelper passwordEncoder;
 
     protected String generateToken(Users user) {
         CustomUserDetails userDetails = CustomUserDetails.create(user);

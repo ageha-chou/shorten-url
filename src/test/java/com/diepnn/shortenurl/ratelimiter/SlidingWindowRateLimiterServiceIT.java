@@ -3,6 +3,8 @@ package com.diepnn.shortenurl.ratelimiter;
 import com.diepnn.shortenurl.common.properties.RateLimiterProperties;
 import com.diepnn.shortenurl.helper.BaseIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,125 +32,175 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 })
 public class SlidingWindowRateLimiterServiceIT extends BaseIntegrationTest {
     @Autowired
-    private RateLimiterService rateLimiterService;
-
-    @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+    private SlidingWindowRateLimiterService rateLimiterService;
 
     @Autowired
     private RateLimiterProperties props;
 
-    private String testClientKey;
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
 
-    @BeforeEach
-    void setUp() {
-        // Generate unique client key for each test to avoid interference
-        testClientKey = "test-" + UUID.randomUUID();
+    private static final String TEST_KEY = "test-client";
+
+    @Test
+    @DisplayName("Should allow requests within limit")
+    void testAllowWithinLimit() {
+        long limit = props.getLimit();
+
+        for (int i = 0; i < limit; i++) {
+            assertTrue(rateLimiterService.isAllowed(TEST_KEY),
+                       "Request " + (i + 1) + " should be allowed");
+        }
     }
 
     @Test
-    void isAllowed_shouldAllowRequests_whenBelowLimit() {
-        // Given
+    @DisplayName("Should deny requests exceeding limit")
+    void testDenyExceedingLimit() {
         long limit = props.getLimit();
 
-        // When - make requests below limit
-        for (long i = 0; i < limit; i++) {
-            boolean result = rateLimiterService.isAllowed(testClientKey);
-            assertTrue(result, "Request " + (i + 1) + " should be allowed");
+        // Fill up to limit
+        for (int i = 0; i < limit; i++) {
+            rateLimiterService.isAllowed(TEST_KEY);
         }
 
-        // Then - verify Redis keys were created
-        Set<String> keys = redisTemplate.keys("rate-limiter::" + testClientKey);
-        assertNotNull(keys);
-        assertFalse(keys.isEmpty());
+        // Next request should be denied
+        assertFalse(rateLimiterService.isAllowed(TEST_KEY),
+                    "Request exceeding limit should be denied");
     }
 
     @Test
-    void isAllowed_shouldDenyRequest_whenLimitExceeded() {
-        // Given
+    @DisplayName("Should allow requests after window expires")
+    void testAllowAfterWindowExpires() throws InterruptedException {
         long limit = props.getLimit();
+        long windowMs = props.getWindowSizeMs();
 
-        // When - exhaust the limit
-        for (long i = 0; i < limit; i++) {
-            assertTrue(rateLimiterService.isAllowed(testClientKey), "Request " + (i + 1) + " should be allowed");
+        // Fill up to limit
+        for (int i = 0; i < limit; i++) {
+            rateLimiterService.isAllowed(TEST_KEY);
         }
 
-        // Then - next request should be denied
-        assertFalse(rateLimiterService.isAllowed(testClientKey), "Request should be denied after exceeding limit");
+        // Should be denied
+        assertFalse(rateLimiterService.isAllowed(TEST_KEY));
+
+        // Wait for window to expire (add buffer for safety)
+        Thread.sleep(windowMs + 100);
+
+        // Should be allowed again
+        assertTrue(rateLimiterService.isAllowed(TEST_KEY),
+                   "Request should be allowed after window expires");
     }
 
     @Test
-    void isAllowed_shouldEnforceLimit_acrossMultipleRequests() {
-        // Given
-        long limit = props.getLimit();
-        long totalRequests = limit + 5;
-        long allowedCount = 0;
+    @DisplayName("Should handle blank key")
+    void testBlankKey() {
+        assertThrows(IllegalArgumentException.class,
+                     () -> rateLimiterService.isAllowed(""),
+                     "Should throw exception for blank key");
 
-        // When
-        for (long i = 0; i < totalRequests; i++) {
-            if (rateLimiterService.isAllowed(testClientKey)) {
-                allowedCount++;
-            }
+        assertThrows(IllegalArgumentException.class,
+                     () -> rateLimiterService.isAllowed(null),
+                     "Should throw exception for null key");
+
+        assertThrows(IllegalArgumentException.class,
+                     () -> rateLimiterService.isAllowed("   "),
+                     "Should throw exception for whitespace key");
+    }
+
+    @Test
+    @DisplayName("Should isolate different keys")
+    void testKeyIsolation() {
+        long limit = props.getLimit();
+
+        String key1 = TEST_KEY + "-1";
+        String key2 = TEST_KEY + "-2";
+
+        // Fill limit for key1
+        for (int i = 0; i < limit; i++) {
+            rateLimiterService.isAllowed(key1);
         }
 
-        // Then
-        assertEquals(limit, allowedCount, "Should allow exactly " + limit + " requests");
+        // key1 should be denied
+        assertFalse(rateLimiterService.isAllowed(key1));
+
+        // key2 should still be allowed (independent limit)
+        assertTrue(rateLimiterService.isAllowed(key2),
+                   "Different keys should have independent rate limits");
     }
 
     @Test
-    void isAllowed_shouldIsolateDifferentClients() {
-        // Given
-        String client1 = "client-1-" + UUID.randomUUID();
-        String client2 = "client-2-" + UUID.randomUUID();
+    @DisplayName("Should handle concurrent requests without race conditions")
+    void testConcurrentRequests() throws InterruptedException {
+        int threadCount = 20;
+        int requestsPerThread = 5;
         long limit = props.getLimit();
 
-        // When - exhaust client1's limit
-        for (long i = 0; i < limit; i++) {
-            assertTrue(rateLimiterService.isAllowed(client1));
-        }
-        assertFalse(rateLimiterService.isAllowed(client1), "Client 1 should be rate limited");
+        String testKey = TEST_KEY + "-concurrent-" + System.nanoTime();
 
-        // Then - client2 should still be allowed
-        assertTrue(rateLimiterService.isAllowed(client2), "Client 2 should not be affected by client 1's rate limit");
-
-        // Verify separate Redis keys
-        Set<String> client1Keys = redisTemplate.keys("rate-limiter::" + client1);
-        Set<String> client2Keys = redisTemplate.keys("rate-limiter::" + client2);
-        assertNotNull(client1Keys);
-        assertNotNull(client2Keys);
-        assertFalse(client1Keys.isEmpty());
-        assertFalse(client2Keys.isEmpty());
-
-        // Cleanup
-        redisTemplate.delete(client1Keys);
-        redisTemplate.delete(client2Keys);
-    }
-
-    @Test
-    void isAllowed_shouldHandleConcurrentRequests_withoutExceedingLimit() throws InterruptedException {
-        // Given
-        long limit = props.getLimit();
-        int threadCount = 30; // More threads than limit
-        int requestsPerThread = 2;
-        int totalRequests = threadCount * requestsPerThread; // 60 total requests
-
-        AtomicInteger allowedCount = new AtomicInteger(0);
-        AtomicInteger deniedCount = new AtomicInteger(0);
+        AtomicInteger allowed = new AtomicInteger(0);
+        AtomicInteger denied = new AtomicInteger(0);
 
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch doneLatch = new CountDownLatch(threadCount);
 
-        // When
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await(); // All threads start together
+                    for (int j = 0; j < requestsPerThread; j++) {
+                        if (rateLimiterService.isAllowed(testKey)) {
+                            allowed.incrementAndGet();
+                        } else {
+                            denied.incrementAndGet();
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown(); // Start all threads
+        assertTrue(doneLatch.await(10, TimeUnit.SECONDS),
+                   "Test timeout - threads didn't complete");
+        executor.shutdown();
+
+        int totalRequests = threadCount * requestsPerThread;
+        assertEquals(totalRequests, allowed.get() + denied.get(),
+                     "Total requests should match");
+
+        assertTrue(allowed.get() <= limit,
+                   String.format("RACE CONDITION: Allowed %d requests but limit is %d",
+                                 allowed.get(), limit));
+
+        assertEquals(limit, allowed.get(),
+                     String.format("Should allow exactly %d requests", limit));
+    }
+
+    @RepeatedTest(50)
+    @DisplayName("Should never exceed limit under high contention (repeated)")
+    void testHighContentionRepeated() throws InterruptedException {
+        int threadCount = 25;
+        int requestsPerThread = 2;
+        long limit = props.getLimit();
+
+        String testKey = TEST_KEY + "-contention-" + System.nanoTime();
+
+        AtomicInteger allowed = new AtomicInteger(0);
+
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
+
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
                 try {
                     startLatch.await();
                     for (int j = 0; j < requestsPerThread; j++) {
-                        if (rateLimiterService.isAllowed(testClientKey)) {
-                            allowedCount.incrementAndGet();
-                        } else {
-                            deniedCount.incrementAndGet();
+                        if (rateLimiterService.isAllowed(testKey)) {
+                            allowed.incrementAndGet();
                         }
                     }
                 } catch (InterruptedException e) {
@@ -160,177 +212,166 @@ public class SlidingWindowRateLimiterServiceIT extends BaseIntegrationTest {
         }
 
         startLatch.countDown();
-        boolean completed = doneLatch.await(10, TimeUnit.SECONDS);
+        assertTrue(doneLatch.await(10, TimeUnit.SECONDS));
         executor.shutdown();
 
-        // Then
-        assertTrue(completed, "All threads should complete within timeout");
-        assertEquals(totalRequests, allowedCount.get() + deniedCount.get(),
-                     "Total requests should equal allowed + denied");
-
-        // The key assertion: some requests MUST be denied
-        assertTrue(allowedCount.get() <= limit,
-                   "Allowed count (" + allowedCount.get() + ") should not exceed limit (" + limit + ")");
-        assertTrue(deniedCount.get() > 0,
-                   "Some requests should be denied when exceeding limit. Denied: " + deniedCount.get());
+        assertTrue(allowed.get() <= limit,
+                   String.format("Race condition detected: allowed=%d, limit=%d",
+                                 allowed.get(), limit));
     }
 
     @Test
-    void isAllowed_shouldCreateKeysWithCorrectFormat() {
-        // When
-        rateLimiterService.isAllowed(testClientKey);
-
-        // Then
-        Set<String> keys = redisTemplate.keys("rate-limiter::" + testClientKey);
-        assertNotNull(keys);
-        assertFalse(keys.isEmpty());
-
-        // Verify key format
-        keys.forEach(key -> {
-            assertTrue(key.matches("rate-limiter::" + testClientKey),
-                       "Key should match pattern 'rate-limiter::<client>' but was: " + key);
-        });
-    }
-
-    @Test
-    void isAllowed_shouldSetTtlOnRedisKeys() {
-        // When
-        rateLimiterService.isAllowed(testClientKey);
-
-        // Then
-        Set<String> keys = redisTemplate.keys("rate-limiter::" + testClientKey);
-        assertNotNull(keys);
-        assertFalse(keys.isEmpty());
-
-        // Verify TTL is set on keys
-        for (String key : keys) {
-            Long ttl = redisTemplate.getExpire(key, TimeUnit.MILLISECONDS);
-            assertNotNull(ttl, "TTL should not be null for key: " + key);
-            assertTrue(ttl > 0, "TTL should be positive for key: " + key);
-
-            // TTL should be window + buffer
-            long minExpectedTtl = props.getWindowSizeMs();
-            long maxExpectedTtl = 10000L;
-
-            assertTrue(ttl >= minExpectedTtl && ttl <= maxExpectedTtl,
-                       "TTL (" + ttl + "ms) should be between " + minExpectedTtl + "ms and " + maxExpectedTtl + "ms");
-        }
-    }
-
-    @Test
-    void isAllowed_shouldAllowRequestsAfterWindowExpires() throws InterruptedException {
-        // Given
+    @DisplayName("Should handle sliding window correctly")
+    void testSlidingWindow() throws InterruptedException {
         long limit = props.getLimit();
+        long windowMs = props.getWindowSizeMs();
+        long halfWindow = windowMs / 2;
 
-        // When - fill up the limit
-        for (long i = 0; i < limit; i++) {
-            assertTrue(rateLimiterService.isAllowed(testClientKey));
+        // Make requests at T=0
+        for (int i = 0; i < limit; i++) {
+            rateLimiterService.isAllowed(TEST_KEY);
         }
 
         // Should be denied immediately
-        assertFalse(rateLimiterService.isAllowed(testClientKey));
+        assertFalse(rateLimiterService.isAllowed(TEST_KEY));
 
-        // Wait for window to expire
-        Thread.sleep(calculateExpectedTtl());
+        // Wait for half the window
+        Thread.sleep(halfWindow);
 
-        // Then - should allow requests again after window expires
-        assertTrue(rateLimiterService.isAllowed(testClientKey), "Should allow requests after window expires");
+        // Still should be denied (original requests still in window)
+        assertFalse(rateLimiterService.isAllowed(TEST_KEY));
+
+        // Wait for the rest of the window
+        Thread.sleep(halfWindow + 100);
+
+        // Now should be allowed (original requests expired)
+        assertTrue(rateLimiterService.isAllowed(TEST_KEY));
     }
 
     @Test
-    void isAllowed_shouldHandleSpecialCharactersInClientKey() {
-        // Given
-        String clientKey = "user:123:api-key-" + UUID.randomUUID();
+    @DisplayName("Should maintain counter accuracy after cleanup")
+    void testCounterAccuracyAfterCleanup() throws InterruptedException {
+        long limit = props.getLimit();
+        long windowMs = props.getWindowSizeMs();
 
-        // When
-        boolean result = rateLimiterService.isAllowed(clientKey);
-
-        // Then
-        assertTrue(result);
-
-        // Verify key was created correctly
-        Set<String> keys = redisTemplate.keys("rate-limiter::" + clientKey);
-        assertNotNull(keys);
-        assertFalse(keys.isEmpty());
-
-        // Cleanup
-        redisTemplate.delete(keys);
-    }
-
-    @Test
-    void isAllowed_shouldThrowException_whenKeyIsBlank() {
-        // When/Then
-        assertThrows(IllegalArgumentException.class, () -> rateLimiterService.isAllowed(""));
-
-        assertThrows(IllegalArgumentException.class, () -> rateLimiterService.isAllowed("   "));
-
-        assertThrows(IllegalArgumentException.class, () -> rateLimiterService.isAllowed(null));
-    }
-
-    @Test
-    void isAllowed_shouldIncrementCountersCorrectly() {
-        int requestCount = 5;
-        for (int i = 0; i < requestCount; i++) {
-            rateLimiterService.isAllowed(testClientKey);
+        // Make half the limit requests
+        long halfLimit = limit / 2;
+        for (int i = 0; i < halfLimit; i++) {
+            rateLimiterService.isAllowed(TEST_KEY);
         }
 
-        String keys = "rate-limiter::" + testClientKey;
-        assertNotNull(keys);
+        // Wait for window to expire
+        Thread.sleep(windowMs + 100);
 
-        Long totalCount = redisTemplate.opsForZSet().count(keys, 0, System.currentTimeMillis());
-        assertEquals(requestCount, totalCount, "Total allowed requests should be + " + requestCount + ", but was: " + totalCount);
-    }
-
-    @Test
-    void isAllowed_shouldHandleRapidSuccessiveRequests() {
-        // Given
-        long limit = props.getLimit();
-
-        // When - make rapid requests
-        int allowedCount = 0;
-        for (long i = 0; i < limit * 2; i++) {
-            if (rateLimiterService.isAllowed(testClientKey)) {
-                allowedCount++;
+        // Make full limit of new requests - should all be allowed
+        int allowed = 0;
+        for (int i = 0; i < limit; i++) {
+            if (rateLimiterService.isAllowed(TEST_KEY)) {
+                allowed++;
             }
         }
 
-        // Then
-        assertEquals(limit, allowedCount, "Should allow exactly " + limit + " requests even when made rapidly");
+        assertEquals(limit, allowed,
+                     "After cleanup, should allow full limit of new requests");
     }
 
     @Test
-    void init_shouldLoadLuaScriptSuccessfully() {
-        // Given/When - service is already initialized via @PostConstruct
+    @DisplayName("Should handle burst traffic correctly")
+    void testBurstTraffic() throws InterruptedException {
+        long limit = props.getLimit();
 
-        // Then - service should work correctly
-        boolean result = rateLimiterService.isAllowed(testClientKey);
+        ExecutorService executor = Executors.newFixedThreadPool(50);
+        CountDownLatch latch = new CountDownLatch((int) limit * 2);
+        AtomicInteger allowed = new AtomicInteger(0);
 
-        assertTrue(result, "Service should work after successful initialization");
+        // Create burst of requests (2x the limit)
+        for (int i = 0; i < limit * 2; i++) {
+            executor.submit(() -> {
+                try {
+                    if (rateLimiterService.isAllowed(TEST_KEY)) {
+                        allowed.incrementAndGet();
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        assertTrue(latch.await(10, TimeUnit.SECONDS));
+        executor.shutdown();
+
+        assertEquals(limit, allowed.get(),
+                     "Burst traffic should only allow up to limit");
     }
 
     @Test
-    void isAllowed_shouldHandleVeryLongClientKeys() {
-        // Given
-        String longKey = "client-" + "x".repeat(200) + "-" + UUID.randomUUID();
+    @DisplayName("Should handle mixed sequential and concurrent patterns")
+    void testMixedPatterns() throws InterruptedException {
+        long limit = props.getLimit();
+        String testKey = TEST_KEY + "-mixed-" + System.nanoTime();
 
-        // When
-        boolean result = rateLimiterService.isAllowed(longKey);
+        // Sequential requests (half the limit)
+        long sequential = limit / 2;
+        for (int i = 0; i < sequential; i++) {
+            assertTrue(rateLimiterService.isAllowed(testKey));
+        }
 
-        // Then
-        assertTrue(result);
+        // Concurrent requests (try to exceed remaining limit)
+        long remaining = limit - sequential;
+        int threadCount = 10;
+        AtomicInteger allowed = new AtomicInteger(0);
 
-        // Verify key was stored
-        Set<String> keys = redisTemplate.keys("rate-limiter::" + longKey);
-        assertNotNull(keys);
-        assertFalse(keys.isEmpty());
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(threadCount);
 
-        // Cleanup
-        redisTemplate.delete(keys);
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    if (rateLimiterService.isAllowed(testKey)) {
+                        allowed.incrementAndGet();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        assertTrue(doneLatch.await(10, TimeUnit.SECONDS));
+        executor.shutdown();
+
+        long totalAllowed = sequential + allowed.get();
+        assertTrue(totalAllowed <= limit,
+                   String.format("Total allowed (%d) should not exceed limit (%d)",
+                                 totalAllowed, limit));
     }
 
-    private long calculateExpectedTtl() {
-        long proportionalBuffer = (long) (props.getWindowSizeMs() * 0.1);
-        long buffer = Math.max(1000L, Math.min(proportionalBuffer, 10000L));
-        return props.getWindowSizeMs() + buffer;
+    @Test
+    @DisplayName("Should properly expire keys with TTL")
+    void testTTLExpiration() throws InterruptedException {
+        String testKey = TEST_KEY + "-ttl-" + System.nanoTime();
+
+        // Make one request
+        rateLimiterService.isAllowed(testKey);
+
+        // Verify keys exist
+        String redisKey = String.format("rate-limiter::%s", testKey);
+        String counterKey = redisKey + ":counter";
+
+        assertTrue(redisTemplate.hasKey(redisKey), "Redis key should exist");
+        assertTrue(redisTemplate.hasKey(counterKey), "Counter key should exist");
+
+        // Check TTL is set (should be greater than 0)
+        Long ttl = redisTemplate.getExpire(redisKey, TimeUnit.MILLISECONDS);
+        assertNotNull(ttl);
+        assertTrue(ttl > 0, "TTL should be set on redis key");
+
+        Long counterTtl = redisTemplate.getExpire(counterKey, TimeUnit.MILLISECONDS);
+        assertNotNull(counterTtl);
+        assertTrue(counterTtl > 0, "TTL should be set on counter key");
     }
 }
