@@ -1,7 +1,6 @@
 package com.diepnn.shortenurl.common.generator;
 
 import com.diepnn.shortenurl.common.properties.SnowflakeProperties;
-import com.diepnn.shortenurl.exception.TooManyRequestException;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -22,7 +21,6 @@ import java.util.concurrent.locks.ReentrantLock;
  * <p>This generator serializes access to the critical section so that the tuple
  * {@code (lastTimestamp, sequence)} is updated atomically. A fair {@code ReentrantLock}
  * is used to minimize latency spikes and preserve ordering under contention.
- * Acquisition uses an interruptible policy so threads can be canceled while waiting.</p>
  *
  * <h3>Clock behavior</h3>
  * <ul>
@@ -31,12 +29,6 @@ import java.util.concurrent.locks.ReentrantLock;
  *   <li>When multiple IDs are requested within the same millisecond, the {@code sequence}
  *       is incremented. On sequence overflow, the generator waits for the next millisecond.</li>
  * </ul>
- *
- * <h3>Backpressure</h3>
- * <p>Implementations may choose to throw
- * {@link com.diepnn.shortenurl.exception.TooManyRequestException} instead of waiting,
- * but by default this generator waits for the next millisecond to maximize throughput
- * without failing calls.</p>
  *
  * <h3>Field validation and packing</h3>
  * <p>Datacenter and machine identifiers are validated at initialization to ensure they
@@ -69,13 +61,8 @@ public class SnowflakeGenerator implements IdGenerator {
 
     /**
      * Lock guarding atomic updates to {@code lastTimestamp} and {@code sequence}.
-     * Acquired interruptibly to remain responsive to thread cancellation.
      */
     private final ReentrantLock lock = new ReentrantLock(true);
-
-    // Retry policy for interrupted lock acquisition
-    private static final int MAX_LOCK_RETRIES = 3;
-    private static final long INITIAL_RETRY_BACKOFF_MS = 1L;
 
     @PostConstruct
     public void init() {
@@ -96,57 +83,44 @@ public class SnowflakeGenerator implements IdGenerator {
     }
 
     /**
-     * Generates a new Snowflake ID.
+     * Generates a new 64-bit Snowflake-style identifier.
      *
-     * <p>Algorithm outline:
-     * <ol>
-     *   <li>Acquire the lock interruptibly to serialize state updates.</li>
-     *   <li>Compute the current timestamp as {@code now - epoch}.</li>
-     *   <li>If the clock moved backward, wait until it reaches {@code lastTimestamp}.</li>
-     *   <li>If timestamp equals {@code lastTimestamp}, increment {@code sequence};
-     *       on overflow, wait for the next timestamp and reset {@code sequence}.</li>
-     *   <li>Pack fields into a 64-bit value in the order:
-     *       sign → epoch → datacenter → machine → sequence.</li>
-     * </ol>
-     * The method guarantees uniqueness and preserves monotonic ordering per node,
-     * assuming a non-regressing clock or successful waiting for catch-up.</p>
+     * <p><b>Overview</b><br>
+     * Produces a positive, time-ordered ID by packing timestamp, datacenter, machine, and sequence fields.</p>
      *
-     * @return a 64-bit, time-ordered unique identifier
-     * @throws com.diepnn.shortenurl.exception.TooManyRequestException
-     *         if the implementation policy elects to signal backpressure (e.g., unable to
-     *         acquire the lock within a retry budget or other configured limits)
+     * <p><b>Thread-safety & Ordering</b></p>
+     * <ul>
+     *   <li>Safe for concurrent callers.</li>
+     *   <li>Updates the (lastTimestamp, sequence) pair atomically under a fair lock.</li>
+     *   <li>Ensures per-process monotonicity (IDs do not decrease within this JVM).</li>
+     * </ul>
+     *
+     * <p><b>Clock & Sequence Handling</b></p>
+     * <ul>
+     *   <li>Timestamp = currentTimeMillis() − configured custom epoch.</li>
+     *   <li>If the clock moves backward (timestamp &lt; lastTimestamp), waits until time catches up.</li>
+     *   <li>Same-millisecond requests increment an in-millisecond sequence.</li>
+     *   <li>On sequence exhaustion for a millisecond, waits for the next millisecond.</li>
+     * </ul>
+     *
+     * <p><b>Performance</b></p>
+     * <ul>
+     *   <li>O(1) on the hot path with minimal allocations.</li>
+     *   <li>Fair locking smooths tail latencies under contention.</li>
+     * </ul>
+     *
+     * <p><b>Guarantees</b></p>
+     * <ul>
+     *   <li>Positive IDs (sign bit(s) kept at zero).</li>
+     *   <li>Monotonic within the process given non-pathological clock behavior.</li>
+     * </ul>
+     *
+     * @return a positive, time-ordered 64-bit identifier
      */
+
     @Override
-    public long generate() throws TooManyRequestException {
-        int attempts = 0;
-        long backoff = INITIAL_RETRY_BACKOFF_MS;
-        boolean acquired = false;
-
-        while (!acquired) {
-            try {
-                lock.lockInterruptibly();
-                acquired = true;
-            } catch (InterruptedException ie) {
-                ++attempts;
-                // Clear interrupt for retry; we'll restore if we ultimately give up
-                Thread.interrupted();
-                if (attempts > MAX_LOCK_RETRIES) {
-                    // Restore interrupted flag and fail
-                    Thread.currentThread().interrupt();
-                    throw new TooManyRequestException("Interrupted while acquiring lock for ID generation after retries");
-                }
-
-                try {
-                    Thread.sleep(backoff);
-                } catch (InterruptedException ignored) {
-                    // Clear and continue with exponential backoff
-                    Thread.interrupted();
-                }
-
-                backoff = Math.min(backoff << 1, 16L); // cap small backoff
-            }
-        }
-
+    public long generate() {
+        lock.lock();
         try {
             long now = System.currentTimeMillis();
             long timestamp = now - snowflakeProps.getEpoch();

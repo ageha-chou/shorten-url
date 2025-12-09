@@ -1,7 +1,7 @@
 package com.diepnn.shortenurl.service;
 
 import com.diepnn.shortenurl.common.annotation.Admin;
-import com.diepnn.shortenurl.common.annotation.validation.User;
+import com.diepnn.shortenurl.common.annotation.User;
 import com.diepnn.shortenurl.common.enums.UrlInfoStatus;
 import com.diepnn.shortenurl.dto.UrlInfoDTO;
 import com.diepnn.shortenurl.dto.UserInfo;
@@ -35,7 +35,6 @@ import org.springframework.util.CollectionUtils;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Database-backed implementation of {@link UrlInfoService}

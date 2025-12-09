@@ -1,6 +1,7 @@
 package com.diepnn.shortenurl.controller;
 
 import com.diepnn.shortenurl.common.enums.UrlInfoStatus;
+import com.diepnn.shortenurl.common.enums.UserRole;
 import com.diepnn.shortenurl.dto.request.UpdateOriginalUrl;
 import com.diepnn.shortenurl.dto.request.UrlInfoRequest;
 import com.diepnn.shortenurl.entity.UrlInfo;
@@ -51,7 +52,8 @@ public class UrlInfoControllerIT extends BaseControllerIT {
         testUser = Users.builder()
                         .email("testuser@example.com")
                         .username("testuser")
-                        .password("p@ssw0rd")
+                        .password(passwordEncoder.encode("p@ssw0rd"))
+                        .role(UserRole.USER)
                         .build();
 
         testUser = userRepository.saveAndFlush(testUser);
@@ -59,7 +61,8 @@ public class UrlInfoControllerIT extends BaseControllerIT {
         otherUser = Users.builder()
                          .email("otheruser@example.com")
                          .username("otheruser")
-                         .password("p@ssw0rd")
+                         .password(passwordEncoder.encode("p@ssw0rd"))
+                         .role(UserRole.USER)
                          .build();
 
         otherUser = userRepository.saveAndFlush(otherUser);

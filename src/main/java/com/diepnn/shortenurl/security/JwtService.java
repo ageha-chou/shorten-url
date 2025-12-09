@@ -71,7 +71,6 @@ public class JwtService {
      */
     public boolean isTokenValid(String token) {
         try {
-            extractAllClaims(token); // throws if tampered
             return !isTokenExpired(token);
         } catch (Exception e) {
             return false;
